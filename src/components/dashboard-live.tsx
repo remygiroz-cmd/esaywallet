@@ -22,10 +22,12 @@ import {
   formatDate,
   formatDateTime,
   formatSignedCurrency,
+  formatPercent,
 } from "@/lib/format";
 import { ui } from "@/lib/ui";
 import { GainBadge } from "./gain-badge";
 import { PortfolioChart } from "./portfolio-chart";
+import { AssetPriceChart } from "./asset-price-chart";
 
 type DashboardResponse = {
   portfolio: PortfolioComputation;
@@ -331,9 +333,9 @@ function AssetRow({
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <span className="text-zinc-400">{expanded ? "▾" : "▸"}</span>
-          <div>
+          <div className="min-w-0">
             <span className="font-semibold text-black dark:text-zinc-50">
               {asset.name}
             </span>{" "}
@@ -344,12 +346,35 @@ function AssetRow({
               {ASSET_TYPE_LABELS[asset.type as AssetType] ?? asset.type} ·{" "}
               {formatQuantity(asset.totalQuantity)} unité
               {asset.totalQuantity > 1 ? "s" : ""}
-              {asset.currentPrice !== null && asset.currentPriceCurrency
-                ? ` · cours ${formatCurrency(asset.currentPrice, asset.currentPriceCurrency)}`
-                : " · cours indisponible"}
             </p>
           </div>
         </div>
+
+        {/* Current market price of the asset, in EUR and USD. */}
+        <div className="text-right sm:text-left">
+          <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
+            {asset.currentPriceEur !== null
+              ? formatCurrency(asset.currentPriceEur, "EUR")
+              : "—"}
+          </p>
+          <p className="text-xs tabular-nums text-zinc-400">
+            {asset.currentPriceUsd !== null
+              ? formatCurrency(asset.currentPriceUsd, "USD")
+              : "—"}
+            {asset.dailyChangePct !== null ? (
+              <span
+                className={`ml-2 font-medium ${
+                  asset.dailyChangePct >= 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-red-600 dark:text-red-400"
+                }`}
+              >
+                {formatPercent(asset.dailyChangePct)} auj.
+              </span>
+            ) : null}
+          </p>
+        </div>
+
         <div className="text-right">
           <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
             {formatCurrency(asset.currentValue, referenceCurrency)}
@@ -371,6 +396,12 @@ function AssetRow({
 
       {expanded ? (
         <div className="flex flex-col gap-4 border-t border-black/[.06] px-5 py-3 dark:border-white/[.08]">
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+              Cours
+            </p>
+            <AssetPriceChart assetId={asset.assetId} />
+          </div>
           <div className="overflow-x-auto">
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
               Achats

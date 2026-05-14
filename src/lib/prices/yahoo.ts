@@ -6,6 +6,8 @@ type YahooChartResponse = {
       meta?: {
         regularMarketPrice?: number;
         currency?: string;
+        previousClose?: number;
+        chartPreviousClose?: number;
       };
     }>;
   };
@@ -14,6 +16,8 @@ type YahooChartResponse = {
 export type StockQuote = {
   price: number;
   currency: string;
+  // 24h change as a percentage, or null when the previous close is unknown.
+  change24h: number | null;
 };
 
 // Yahoo's chart endpoint is the most reliable keyless source for equities
@@ -45,8 +49,15 @@ export async function fetchStockPrice(
     return null;
   }
 
+  const previousClose = meta.previousClose ?? meta.chartPreviousClose;
+  const change24h =
+    typeof previousClose === "number" && previousClose > 0
+      ? ((meta.regularMarketPrice - previousClose) / previousClose) * 100
+      : null;
+
   return {
     price: meta.regularMarketPrice,
     currency: meta.currency.toUpperCase(),
+    change24h,
   };
 }

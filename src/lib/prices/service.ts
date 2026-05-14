@@ -48,11 +48,15 @@ export async function refreshPrices(
     try {
       const priceMap = await fetchCryptoPrices(ids, [...SUPPORTED_CURRENCIES]);
       for (const asset of cryptoAssets) {
-        const value = priceMap.get(asset.coingeckoId as string)?.[
-          asset.quoteCurrency
-        ];
+        const quote = priceMap.get(asset.coingeckoId as string);
+        const value = quote?.prices[asset.quoteCurrency];
         if (typeof value === "number") {
-          await savePrice(asset.id, value, asset.quoteCurrency);
+          await savePrice(
+            asset.id,
+            value,
+            asset.quoteCurrency,
+            quote?.changes[asset.quoteCurrency] ?? null,
+          );
           updated += 1;
         } else {
           errors.push(
@@ -78,7 +82,12 @@ export async function refreshPrices(
     try {
       const quote = await fetchStockPrice(asset.yahooSymbol as string);
       if (quote) {
-        await savePrice(asset.id, quote.price, quote.currency);
+        await savePrice(
+          asset.id,
+          quote.price,
+          quote.currency,
+          quote.change24h,
+        );
         updated += 1;
       } else {
         errors.push(
@@ -107,11 +116,12 @@ async function savePrice(
   assetId: string,
   price: number,
   currency: string,
+  change24h: number | null,
 ): Promise<void> {
   await prisma.priceCache.upsert({
     where: { assetId },
-    create: { assetId, price, currency },
-    update: { price, currency, fetchedAt: new Date() },
+    create: { assetId, price, currency, change24h },
+    update: { price, currency, change24h, fetchedAt: new Date() },
   });
 }
 
