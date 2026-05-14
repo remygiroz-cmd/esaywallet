@@ -17,6 +17,7 @@ import {
   createTransactionsBulk,
   createBulkTransactions,
   deleteTransactionsBulk,
+  moveAssetTransactions,
 } from "@/lib/transactions";
 import { parseTransactionRows } from "@/lib/import";
 import { parseCmcCsv } from "@/lib/import-cmc";
@@ -191,6 +192,30 @@ export type BulkDeleteState = {
   deleted?: number;
   submittedAt?: number;
 };
+
+// Moves an asset's whole position from one wallet to another. Called
+// imperatively (e.g. from a drag-and-drop handler), not via a form.
+export async function moveAssetWalletAction(
+  assetId: string,
+  fromWalletId: string,
+  toWalletId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  const moved = await moveAssetTransactions(
+    user.id,
+    assetId,
+    fromWalletId,
+    toWalletId,
+  );
+  if (!moved) {
+    return { ok: false, error: "Déplacement impossible." };
+  }
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/assets");
+  revalidatePath("/wallets/[id]", "page");
+  return { ok: true };
+}
 
 export async function deleteTransactionsBulkAction(
   _prev: BulkDeleteState,

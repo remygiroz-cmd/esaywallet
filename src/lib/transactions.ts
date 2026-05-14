@@ -94,6 +94,30 @@ export function deleteTransaction(id: string, userId: string) {
   return prisma.transaction.deleteMany({ where: { id, wallet: { userId } } });
 }
 
+// Moves every transaction of an asset from one wallet to another (i.e.
+// reassigns the asset's whole position). Scoped to the user's own data.
+export async function moveAssetTransactions(
+  userId: string,
+  assetId: string,
+  fromWalletId: string,
+  toWalletId: string,
+): Promise<boolean> {
+  if (fromWalletId === toWalletId) return false;
+
+  const [fromWallet, toWallet, asset] = await Promise.all([
+    prisma.wallet.findFirst({ where: { id: fromWalletId, userId } }),
+    prisma.wallet.findFirst({ where: { id: toWalletId, userId } }),
+    prisma.asset.findFirst({ where: { id: assetId, userId } }),
+  ]);
+  if (!fromWallet || !toWallet || !asset) return false;
+
+  await prisma.transaction.updateMany({
+    where: { assetId, walletId: fromWalletId, wallet: { userId } },
+    data: { walletId: toWalletId },
+  });
+  return true;
+}
+
 // Deletes many transactions at once. Scoped through the wallet so a user
 // can only ever delete their own. Returns the number actually deleted.
 export async function deleteTransactionsBulk(
