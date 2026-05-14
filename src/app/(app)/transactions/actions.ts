@@ -20,7 +20,8 @@ import {
 } from "@/lib/transactions";
 import { parseTransactionRows } from "@/lib/import";
 import { parseCmcCsv } from "@/lib/import-cmc";
-import { resolveCoingeckoId } from "@/lib/prices/search";
+import { parseTrCsv } from "@/lib/import-tr";
+import { resolveCoingeckoId, resolveYahooSymbol } from "@/lib/prices/search";
 
 export type TransactionFormState = {
   error?: string;
@@ -262,7 +263,10 @@ export async function importTransactionsAction(
   return { imported: count, submittedAt: Date.now() };
 }
 
-export type CmcImportState = {
+// Shared result shape for the broker-file importers (CoinMarketCap,
+// Trade Republic): they create one wallet's worth of transactions across
+// many auto-created assets.
+export type BulkImportState = {
   error?: string;
   imported?: number;
   assetsCount?: number;
@@ -274,9 +278,9 @@ export type CmcImportState = {
 // assets. Each token symbol is resolved to a CoinGecko id so live prices
 // work straight away.
 export async function importCmcAction(
-  _prev: CmcImportState,
+  _prev: BulkImportState,
   formData: FormData,
-): Promise<CmcImportState> {
+): Promise<BulkImportState> {
   const user = await requireUser();
   const walletId = String(formData.get("walletId") ?? "");
   const text = String(formData.get("data") ?? "");
@@ -339,6 +343,86 @@ export async function importCmcAction(
     imported: count,
     assetsCount: tokens.length,
     resolvedCount: resolvedByToken.size,
+    submittedAt: Date.now(),
+  };
+}
+
+// Imports a Trade Republic transaction-history CSV. Securities are
+// identified by ISIN, which is resolved to a Yahoo Finance symbol so live
+// prices work straight away.
+export async function importTrAction(
+  _prev: BulkImportState,
+  formData: FormData,
+): Promise<BulkImportState> {
+  const user = await requireUser();
+  const walletId = String(formData.get("walletId") ?? "");
+  const text = String(formData.get("data") ?? "");
+
+  if (!walletId) return { error: "Sélectionnez un wallet." };
+
+  const { rows } = parseTrCsv(text);
+  if (rows.length === 0) {
+    return { error: "Aucune transaction valide trouvée dans le fichier." };
+  }
+
+  // Group rows by ISIN so each security is resolved and created once.
+  const rowsByIsin = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = rowsByIsin.get(row.isin);
+    if (list) list.push(row);
+    else rowsByIsin.set(row.isin, [row]);
+  }
+  const isins = [...rowsByIsin.keys()];
+
+  const resolutions = await Promise.allSettled(
+    isins.map((isin) => resolveYahooSymbol(isin)),
+  );
+  const resolvedByIsin = new Map<string, { symbol: string; name: string }>();
+  isins.forEach((isin, index) => {
+    const result = resolutions[index];
+    if (result.status === "fulfilled" && result.value) {
+      resolvedByIsin.set(isin, result.value);
+    }
+  });
+
+  const assetIdByIsin = new Map<string, string>();
+  for (const isin of isins) {
+    const sample = (rowsByIsin.get(isin) as typeof rows)[0];
+    const resolved = resolvedByIsin.get(isin);
+    const asset = await upsertAsset(user.id, {
+      symbol: resolved?.symbol ?? isin,
+      name: sample.name || resolved?.name || isin,
+      type: sample.assetType,
+      quoteCurrency: sample.currency || "EUR",
+      coingeckoId: null,
+      yahooSymbol: resolved?.symbol ?? null,
+    });
+    assetIdByIsin.set(isin, asset.id);
+  }
+
+  const count = await createWalletTransactionsBulk(
+    user.id,
+    walletId,
+    rows.map((row) => ({
+      assetId: assetIdByIsin.get(row.isin) as string,
+      type: row.type,
+      executedAt: new Date(row.executedAt),
+      unitPrice: row.unitPrice,
+      quantity: row.quantity,
+      amountInvested: row.amountInvested,
+      fees: row.fees,
+    })),
+  );
+  if (count === null) return { error: "Wallet introuvable." };
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/assets");
+  revalidatePath("/wallets/[id]", "page");
+  return {
+    imported: count,
+    assetsCount: isins.length,
+    resolvedCount: resolvedByIsin.size,
     submittedAt: Date.now(),
   };
 }

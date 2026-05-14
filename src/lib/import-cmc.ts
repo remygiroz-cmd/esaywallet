@@ -5,6 +5,8 @@
 // Fields are quoted and numbers use the US format ("70,994.98" = 70994.98).
 // Pure module — used both client-side (preview) and server-side (import).
 
+import { parseCsvLine } from "@/lib/csv";
+
 export type CmcRow = {
   line: number;
   token: string; // symbol, upper-cased
@@ -21,38 +23,6 @@ export type CmcParseResult = {
   skipped: number;
   tokens: string[];
 };
-
-// Splits one CSV line, honouring quoted fields that may contain commas.
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (line[i + 1] === '"') {
-          current += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += char;
-      }
-    } else if (char === '"') {
-      inQuotes = true;
-    } else if (char === ",") {
-      fields.push(current);
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  fields.push(current);
-  return fields;
-}
 
 // US-formatted number: comma = thousands separator, dot = decimal.
 function parseUsNumber(raw: string | undefined): number | null {

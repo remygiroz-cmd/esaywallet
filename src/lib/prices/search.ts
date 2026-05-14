@@ -122,6 +122,18 @@ export async function searchAssets(
   return [...stocks, ...crypto].slice(0, 12);
 }
 
+// Resolves an ISIN (or ticker) to a Yahoo Finance symbol, used when
+// importing a broker file that identifies securities by ISIN. Yahoo's
+// search resolves ISINs and ranks results by relevance.
+export async function resolveYahooSymbol(
+  query: string,
+): Promise<{ symbol: string; name: string } | null> {
+  const results = await searchYahoo(query).catch(() => []);
+  const first = results[0];
+  if (!first || !first.yahooSymbol) return null;
+  return { symbol: first.yahooSymbol, name: first.name };
+}
+
 // Resolves a crypto symbol (e.g. "BTC") to its CoinGecko id, used when
 // importing a file that only carries ticker symbols. CoinGecko ranks
 // search results by relevance, so the first symbol match is the main coin.

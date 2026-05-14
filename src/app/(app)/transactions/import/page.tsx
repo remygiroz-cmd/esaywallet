@@ -4,6 +4,7 @@ import { getUserWallets } from "@/lib/wallets";
 import { getUserAssets } from "@/lib/assets";
 import { ui } from "@/lib/ui";
 import { CmcImport } from "@/components/cmc-import";
+import { TrImport } from "@/components/tr-import";
 import { TransactionImport } from "@/components/transaction-import";
 
 export default async function TransactionImportPage() {
@@ -59,6 +60,19 @@ export default async function TransactionImportPage() {
               est traitée comme une vente.
             </p>
             <CmcImport wallets={walletOptions} />
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Depuis Trade Republic
+            </h2>
+            <p className={ui.subtle}>
+              Exportez votre historique de transactions Trade Republic
+              (fichier .csv), choisissez le wallet de destination et déposez le
+              fichier. Les actions et ETF sont identifiés par leur code ISIN,
+              résolu automatiquement pour récupérer le prix en direct.
+            </p>
+            <TrImport wallets={walletOptions} />
           </section>
 
           <section className="flex flex-col gap-3">

@@ -3,25 +3,25 @@
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import {
-  importCmcAction,
+  importTrAction,
   type BulkImportState,
 } from "@/app/(app)/transactions/actions";
-import { parseCmcCsv } from "@/lib/import-cmc";
+import { parseTrCsv } from "@/lib/import-tr";
 import { ui } from "@/lib/ui";
 
 type WalletOption = { id: string; name: string; currency: string };
 
 const initialState: BulkImportState = {};
 
-export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
+export function TrImport({ wallets }: { wallets: WalletOption[] }) {
   const [state, formAction, pending] = useActionState(
-    importCmcAction,
+    importTrAction,
     initialState,
   );
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
 
-  const preview = useMemo(() => (text ? parseCmcCsv(text) : null), [text]);
+  const preview = useMemo(() => (text ? parseTrCsv(text) : null), [text]);
 
   function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -43,8 +43,8 @@ export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
         state.resolvedCount < state.assetsCount ? (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {state.resolvedCount}/{state.assetsCount} assets ont leur prix en
-            direct résolu automatiquement. Pour les autres, renseigne
-            l&apos;identifiant sur la page Assets.
+            direct résolu automatiquement. Pour les autres, renseigne le
+            symbole Yahoo sur la page Assets.
           </p>
         ) : null}
         <Link href="/transactions" className={ui.primaryButton}>
@@ -83,7 +83,7 @@ export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
       </label>
 
       <label className={ui.label}>
-        Fichier CoinMarketCap (.csv)
+        Fichier Trade Republic (.csv)
         <input
           type="file"
           accept=".csv,text/csv"
@@ -101,20 +101,15 @@ export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
         <div className="rounded-lg border border-black/[.08] bg-zinc-50 p-3 text-sm dark:border-white/[.1] dark:bg-zinc-900">
           <p className="font-medium text-zinc-700 dark:text-zinc-200">
             {preview.rows.length} transaction
-            {preview.rows.length === 1 ? "" : "s"} · {preview.tokens.length}{" "}
-            asset{preview.tokens.length === 1 ? "" : "s"} détecté
-            {preview.tokens.length === 1 ? "" : "s"}
+            {preview.rows.length === 1 ? "" : "s"} · {preview.isins.length}{" "}
+            asset{preview.isins.length === 1 ? "" : "s"} détecté
+            {preview.isins.length === 1 ? "" : "s"}
             {preview.skipped > 0
               ? ` · ${preview.skipped} ligne${
                   preview.skipped === 1 ? "" : "s"
                 } ignorée${preview.skipped === 1 ? "" : "s"}`
               : ""}
           </p>
-          {preview.tokens.length > 0 ? (
-            <p className="mt-1 text-xs text-zinc-400">
-              {preview.tokens.join(", ")}
-            </p>
-          ) : null}
         </div>
       ) : null}
 
