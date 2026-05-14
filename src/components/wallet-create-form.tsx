@@ -66,6 +66,11 @@ export function WalletCreateForm() {
         </select>
       </label>
 
+      <label className={`${ui.label} sm:w-44`}>
+        Date d&apos;ouverture
+        <input name="openedAt" type="date" className={ui.input} />
+      </label>
+
       <button type="submit" disabled={pending} className={ui.primaryButton}>
         {pending ? "Création…" : "Ajouter"}
       </button>

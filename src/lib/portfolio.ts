@@ -18,7 +18,7 @@
 // value = open cost) in the aggregates, and flagged via `hasMissingPrice`.
 
 import { buildFxRateMap, convertCurrency } from "@/lib/currency";
-import { DEFAULT_CURRENCY, taxRateForWalletType } from "@/lib/constants";
+import { DEFAULT_CURRENCY, taxRateForWalletAt } from "@/lib/constants";
 
 export type PortfolioInput = {
   wallets: {
@@ -27,6 +27,7 @@ export type PortfolioInput = {
     type: string;
     currency: string;
     taxRate?: number | null;
+    openedAt?: string | null;
   }[];
   assets: {
     id: string;
@@ -517,9 +518,21 @@ function aggregateWallets(
     assets.sort((a, b) => b.gainPct - a.gainPct);
 
     const gain = currentValue - totalCost;
-    const taxRate =
-      wallet.taxRate ?? taxRateForWalletType(wallet.type);
     const cashBalance = cashByWallet[wallet.id] ?? 0;
+
+    // Each sale is taxed at the rate applying on its own date — this matters
+    // for a PEA, which becomes income-tax exempt after 5 years.
+    const nowIso = new Date().toISOString();
+    const taxRate = taxRateForWalletAt(wallet, nowIso);
+    let estimatedTax = 0;
+    for (const position of walletPositions) {
+      for (const sale of position.sales) {
+        estimatedTax +=
+          Math.max(0, sale.realizedGain) *
+          taxRateForWalletAt(wallet, sale.executedAt);
+      }
+    }
+
     return {
       walletId: wallet.id,
       name: wallet.name,
@@ -534,7 +547,7 @@ function aggregateWallets(
       gainPct: ratio(gain, totalCost),
       realizedGain,
       taxRate,
-      estimatedTax: Math.max(0, realizedGain) * taxRate,
+      estimatedTax,
       hasMissingPrice,
       assets,
       lots,

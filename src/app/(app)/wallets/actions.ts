@@ -25,6 +25,8 @@ const walletSchema = z.object({
   currency: z.enum(SUPPORTED_CURRENCIES),
   // Tax rate entered as a percentage string (e.g. "30"); "" = use default.
   taxRate: z.string().trim().max(10).optional(),
+  // Account opening date (YYYY-MM-DD); "" = unknown.
+  openedAt: z.string().trim().max(10).optional(),
 });
 
 function parseWallet(formData: FormData) {
@@ -33,6 +35,7 @@ function parseWallet(formData: FormData) {
     type: formData.get("type"),
     currency: formData.get("currency"),
     taxRate: formData.get("taxRate") ?? "",
+    openedAt: formData.get("openedAt") ?? "",
   });
 }
 
@@ -42,6 +45,13 @@ function toTaxRate(raw: string | undefined): number | null {
   const percent = Number(raw.replace(",", "."));
   if (!Number.isFinite(percent) || percent < 0 || percent > 100) return null;
   return percent / 100;
+}
+
+// Date input string -> Date, or null when left blank / invalid.
+function toOpenedAt(raw: string | undefined): Date | null {
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export async function createWalletAction(
@@ -58,6 +68,7 @@ export async function createWalletAction(
     type: parsed.data.type,
     currency: parsed.data.currency,
     taxRate: toTaxRate(parsed.data.taxRate),
+    openedAt: toOpenedAt(parsed.data.openedAt),
   });
   revalidatePath("/wallets");
   return { ok: true, submittedAt: Date.now() };
@@ -79,6 +90,7 @@ export async function updateWalletAction(
     type: parsed.data.type,
     currency: parsed.data.currency,
     taxRate: toTaxRate(parsed.data.taxRate),
+    openedAt: toOpenedAt(parsed.data.openedAt),
   });
   revalidatePath("/wallets");
   revalidatePath(`/wallets/${id}`);
