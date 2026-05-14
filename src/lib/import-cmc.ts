@@ -5,7 +5,7 @@
 // Fields are quoted and numbers use the US format ("70,994.98" = 70994.98).
 // Pure module — used both client-side (preview) and server-side (import).
 
-import { parseCsvLine } from "@/lib/csv";
+import { parseCsvLine, detectDelimiter } from "@/lib/csv";
 
 export type CmcRow = {
   line: number;
@@ -63,7 +63,8 @@ export function parseCmcCsv(text: string): CmcParseResult {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return { rows: [], skipped: 0, tokens: [] };
 
-  const header = parseCsvLine(lines[0]);
+  const delimiter = detectDelimiter(lines[0]);
+  const header = parseCsvLine(lines[0], delimiter);
   const idx = {
     date: columnIndex(header, (name) => name.startsWith("date")),
     token: columnIndex(header, (name) => name === "token"),
@@ -79,7 +80,7 @@ export function parseCmcCsv(text: string): CmcParseResult {
   const tokenSet = new Set<string>();
 
   for (let i = 1; i < lines.length; i += 1) {
-    const fields = parseCsvLine(lines[i]);
+    const fields = parseCsvLine(lines[i], delimiter);
     const token = (fields[idx.token] ?? "").trim().toUpperCase();
     const rawType = (fields[idx.type] ?? "").trim().toLowerCase();
     const executedAt = parseCmcDate(fields[idx.date]);

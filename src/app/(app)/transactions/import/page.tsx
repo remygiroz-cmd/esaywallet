@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth-server";
 import { getUserWallets } from "@/lib/wallets";
 import { getUserAssets } from "@/lib/assets";
 import { ui } from "@/lib/ui";
+import { GenericImport } from "@/components/generic-import";
 import { CmcImport } from "@/components/cmc-import";
 import { TrImport } from "@/components/tr-import";
 import { TransactionImport } from "@/components/transaction-import";
@@ -51,50 +52,49 @@ export default async function TransactionImportPage() {
         <>
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Depuis CoinMarketCap
+              Import universel — n&apos;importe quel CSV
             </h2>
             <p className={ui.subtle}>
-              Exportez votre historique de transactions depuis CoinMarketCap
-              (fichier .csv), choisissez le wallet de destination et déposez le
-              fichier. Les assets sont créés automatiquement et leur prix en
-              direct est résolu pour vous. Une ligne avec un montant négatif
-              est traitée comme une vente.
+              Déposez le fichier `.csv` exporté de n&apos;importe quel
+              courtier ou tableur. easyWallet devine automatiquement à quoi
+              correspond chaque colonne — vérifiez l&apos;association proposée,
+              corrigez si besoin, choisissez le wallet de chaque asset, puis
+              importez.
+            </p>
+            <GenericImport wallets={walletOptions} />
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Raccourci CoinMarketCap
+            </h2>
+            <p className={ui.subtle}>
+              Pré-configuré pour le fichier d&apos;export CoinMarketCap : tous
+              les assets sont des cryptos.
             </p>
             <CmcImport wallets={walletOptions} />
           </section>
 
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Depuis Trade Republic
+              Raccourci Trade Republic
             </h2>
             <p className={ui.subtle}>
-              Exportez votre historique de transactions Trade Republic
-              (fichier .csv), choisissez le wallet de destination et déposez le
-              fichier. Les actions et ETF sont identifiés par leur code ISIN,
-              résolu automatiquement pour récupérer le prix en direct.
+              Pré-configuré pour le fichier d&apos;export Trade Republic : les
+              titres sont identifiés par leur code ISIN.
             </p>
             <TrImport wallets={walletOptions} />
           </section>
 
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Coller des lignes (autre tableur)
+              Coller des lignes (un seul asset)
             </h2>
-            <ol className="flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-300">
-              <li>1. Choisissez le wallet et l&apos;asset de destination.</li>
-              <li>
-                2. Dans votre tableur, sélectionnez 4 colonnes dans cet ordre :{" "}
-                <strong>Date</strong>, <strong>Montant investi</strong>,{" "}
-                <strong>Quantité</strong>, <strong>Prix unitaire</strong>.
-              </li>
-              <li>
-                3. Copiez-les (Ctrl+C) et collez-les dans la zone ci-dessous.
-              </li>
-              <li>
-                4. Vérifiez l&apos;aperçu, puis cliquez sur Importer. Un montant
-                négatif est traité comme une vente.
-              </li>
-            </ol>
+            <p className={ui.subtle}>
+              Pour un import rapide d&apos;un seul asset : choisissez le wallet
+              et l&apos;asset, puis collez les colonnes Date, Montant investi,
+              Quantité, Prix unitaire.
+            </p>
             <TransactionImport
               wallets={walletOptions}
               assets={assets.map((a) => ({

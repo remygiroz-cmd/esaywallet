@@ -22,7 +22,12 @@ import {
 import { parseTransactionRows } from "@/lib/import";
 import { parseCmcCsv } from "@/lib/import-cmc";
 import { parseTrCsv } from "@/lib/import-tr";
-import { resolveCoingeckoId, resolveYahooSymbol } from "@/lib/prices/search";
+import { parseGenericCsv, type GenericMapping } from "@/lib/import-generic";
+import {
+  resolveCoingeckoId,
+  resolveYahooSymbol,
+  resolveGenericAsset,
+} from "@/lib/prices/search";
 
 export type TransactionFormState = {
   error?: string;
@@ -467,6 +472,120 @@ export async function importTrAction(
     imported: count,
     assetsCount: isins.length,
     resolvedCount: resolvedByIsin.size,
+    submittedAt: Date.now(),
+  };
+}
+
+// Universal importer: parses any CSV against a user-confirmed column
+// mapping, resolves every identifier to a price provider, and routes each
+// asset to the wallet chosen in the review step.
+export async function importGenericAction(
+  _prev: BulkImportState,
+  formData: FormData,
+): Promise<BulkImportState> {
+  const user = await requireUser();
+  const text = String(formData.get("data") ?? "");
+
+  let mapping: GenericMapping;
+  try {
+    mapping = JSON.parse(String(formData.get("mapping") ?? "")) as GenericMapping;
+  } catch {
+    return { error: "Configuration des colonnes invalide." };
+  }
+
+  const { rows } = parseGenericCsv(text, mapping);
+  if (rows.length === 0) {
+    return {
+      error:
+        "Aucune transaction valide — vérifiez l'association des colonnes.",
+    };
+  }
+
+  // Group rows by symbol so each asset is resolved and created once.
+  const rowsBySymbol = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = rowsBySymbol.get(row.symbol);
+    if (list) list.push(row);
+    else rowsBySymbol.set(row.symbol, [row]);
+  }
+  const symbols = [...rowsBySymbol.keys()];
+
+  // One destination wallet per asset, assigned in the review step.
+  const walletBySymbol = new Map<string, string>();
+  for (const symbol of symbols) {
+    const walletId = String(formData.get(`wallet_${symbol}`) ?? "");
+    if (!walletId) {
+      return { error: `Sélectionnez un wallet pour ${symbol}.` };
+    }
+    walletBySymbol.set(symbol, walletId);
+  }
+
+  const resolutions = await Promise.allSettled(
+    symbols.map((symbol) => {
+      const sample = (rowsBySymbol.get(symbol) as typeof rows)[0];
+      return resolveGenericAsset(
+        symbol,
+        mapping.assetKind,
+        sample.assetClass,
+        sample.name,
+        sample.currency,
+      );
+    }),
+  );
+
+  const assetIdBySymbol = new Map<string, string>();
+  let resolvedCount = 0;
+  for (let i = 0; i < symbols.length; i += 1) {
+    const symbol = symbols[i];
+    const sample = (rowsBySymbol.get(symbol) as typeof rows)[0];
+    const result = resolutions[i];
+    const resolved =
+      result.status === "fulfilled"
+        ? result.value
+        : {
+            symbol,
+            name: sample.name,
+            type: "STOCK" as const,
+            quoteCurrency: sample.currency || "EUR",
+            coingeckoId: null,
+            yahooSymbol: null,
+          };
+    if (resolved.coingeckoId || resolved.yahooSymbol) resolvedCount += 1;
+
+    const asset = await upsertAsset(user.id, {
+      symbol: resolved.symbol,
+      name: resolved.name,
+      type: resolved.type,
+      quoteCurrency: resolved.quoteCurrency,
+      coingeckoId: resolved.coingeckoId,
+      yahooSymbol: resolved.yahooSymbol,
+    });
+    assetIdBySymbol.set(symbol, asset.id);
+  }
+
+  const count = await createBulkTransactions(
+    user.id,
+    rows.map((row) => ({
+      walletId: walletBySymbol.get(row.symbol) as string,
+      assetId: assetIdBySymbol.get(row.symbol) as string,
+      type: row.type,
+      executedAt: new Date(row.executedAt),
+      unitPrice: row.unitPrice,
+      quantity: row.quantity,
+      amountInvested: row.amountInvested,
+      fees: row.fees,
+    })),
+  );
+  if (count === null) return { error: "Wallet introuvable." };
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/assets");
+  revalidatePath("/wallets/[id]", "page");
+  return {
+    imported: count,
+    assetsCount: symbols.length,
+    resolvedCount,
     submittedAt: Date.now(),
   };
 }

@@ -7,7 +7,7 @@
 // / `amount` are signed (negative for buys). Numbers use a dot decimal.
 // Pure module — used both client-side (preview) and server-side (import).
 
-import { parseCsvLine } from "@/lib/csv";
+import { parseCsvLine, detectDelimiter } from "@/lib/csv";
 
 export type TrRow = {
   line: number;
@@ -75,7 +75,8 @@ export function parseTrCsv(text: string): TrParseResult {
     return { rows: [], skipped: 0, isins: [], classes: [], assets: [] };
   }
 
-  const header = parseCsvLine(lines[0]);
+  const delimiter = detectDelimiter(lines[0]);
+  const header = parseCsvLine(lines[0], delimiter);
   const idx = {
     datetime: columnIndex(header, "datetime"),
     date: columnIndex(header, "date"),
@@ -95,7 +96,7 @@ export function parseTrCsv(text: string): TrParseResult {
   const isinSet = new Set<string>();
 
   for (let i = 1; i < lines.length; i += 1) {
-    const fields = parseCsvLine(lines[i]);
+    const fields = parseCsvLine(lines[i], delimiter);
     const isin = (fields[idx.symbol] ?? "").trim().toUpperCase();
     const rawType = (fields[idx.type] ?? "").trim().toUpperCase();
     const executedAt = parseTrDate(fields[idx.datetime], fields[idx.date]);
