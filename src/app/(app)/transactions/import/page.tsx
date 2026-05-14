@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth-server";
 import { getUserWallets } from "@/lib/wallets";
 import { getUserAssets } from "@/lib/assets";
 import { ui } from "@/lib/ui";
-import { GenericImport } from "@/components/generic-import";
+import { MultiImport } from "@/components/multi-import";
 import { CmcImport } from "@/components/cmc-import";
 import { TrImport } from "@/components/tr-import";
 import { TransactionImport } from "@/components/transaction-import";
@@ -52,16 +52,16 @@ export default async function TransactionImportPage() {
         <>
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Import universel — n&apos;importe quel CSV
+              Import universel — un ou plusieurs fichiers
             </h2>
             <p className={ui.subtle}>
-              Déposez le fichier `.csv` exporté de n&apos;importe quel
-              courtier ou tableur. easyWallet devine automatiquement à quoi
-              correspond chaque colonne — vérifiez l&apos;association proposée,
-              corrigez si besoin, choisissez le wallet de chaque asset, puis
-              importez.
+              Déposez un ou plusieurs fichiers `.csv` exportés de n&apos;importe
+              quel courtier ou tableur. easyWallet devine à quoi correspond
+              chaque colonne (vérifiez et corrigez si besoin), fusionne tous
+              les fichiers, détecte et exclut les transactions en double, puis
+              vous laisse choisir le wallet de chaque asset avant l&apos;import.
             </p>
-            <GenericImport wallets={walletOptions} />
+            <MultiImport wallets={walletOptions} />
           </section>
 
           <section className="flex flex-col gap-3">

@@ -22,7 +22,7 @@ import {
 import { parseTransactionRows } from "@/lib/import";
 import { parseCmcCsv } from "@/lib/import-cmc";
 import { parseTrCsv } from "@/lib/import-tr";
-import { parseGenericCsv, type GenericMapping } from "@/lib/import-generic";
+import type { ImportPayloadRow } from "@/lib/import-multi";
 import {
   resolveCoingeckoId,
   resolveYahooSymbol,
@@ -482,33 +482,33 @@ export async function importTrAction(
   };
 }
 
-// Universal importer: parses any CSV against a user-confirmed column
-// mapping, resolves every identifier to a price provider, and routes each
-// asset to the wallet chosen in the review step.
-export async function importGenericAction(
+// Multi-file universal importer. The client parses every CSV against its
+// own column mapping, merges the rows, drops cross-file duplicates and
+// assigns a wallet per asset; this action receives the final, normalised
+// rows as JSON, resolves each asset to a price provider, and inserts.
+export async function importMultiAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
   const user = await requireUser();
-  const text = String(formData.get("data") ?? "");
 
-  let mapping: GenericMapping;
+  let payload: {
+    rows: ImportPayloadRow[];
+    walletBySymbol: Record<string, string>;
+  };
   try {
-    mapping = JSON.parse(String(formData.get("mapping") ?? "")) as GenericMapping;
+    payload = JSON.parse(String(formData.get("payload") ?? ""));
   } catch {
-    return { error: "Configuration des colonnes invalide." };
+    return { error: "Données d'import invalides." };
   }
 
-  const { rows } = parseGenericCsv(text, mapping);
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
   if (rows.length === 0) {
-    return {
-      error:
-        "Aucune transaction valide — vérifiez l'association des colonnes.",
-    };
+    return { error: "Aucune transaction à importer." };
   }
 
   // Group rows by symbol so each asset is resolved and created once.
-  const rowsBySymbol = new Map<string, typeof rows>();
+  const rowsBySymbol = new Map<string, ImportPayloadRow[]>();
   for (const row of rows) {
     const list = rowsBySymbol.get(row.symbol);
     if (list) list.push(row);
@@ -517,21 +517,18 @@ export async function importGenericAction(
   const symbols = [...rowsBySymbol.keys()];
 
   // One destination wallet per asset, assigned in the review step.
-  const walletBySymbol = new Map<string, string>();
   for (const symbol of symbols) {
-    const walletId = String(formData.get(`wallet_${symbol}`) ?? "");
-    if (!walletId) {
+    if (!payload.walletBySymbol?.[symbol]) {
       return { error: `Sélectionnez un wallet pour ${symbol}.` };
     }
-    walletBySymbol.set(symbol, walletId);
   }
 
   const resolutions = await Promise.allSettled(
     symbols.map((symbol) => {
-      const sample = (rowsBySymbol.get(symbol) as typeof rows)[0];
+      const sample = rowsBySymbol.get(symbol)![0];
       return resolveGenericAsset(
         symbol,
-        mapping.assetKind,
+        sample.assetKind,
         sample.assetClass,
         sample.name,
         sample.currency,
@@ -543,7 +540,7 @@ export async function importGenericAction(
   let resolvedCount = 0;
   for (let i = 0; i < symbols.length; i += 1) {
     const symbol = symbols[i];
-    const sample = (rowsBySymbol.get(symbol) as typeof rows)[0];
+    const sample = rowsBySymbol.get(symbol)![0];
     const result = resolutions[i];
     const resolved =
       result.status === "fulfilled"
@@ -572,7 +569,7 @@ export async function importGenericAction(
   const count = await createBulkTransactions(
     user.id,
     rows.map((row) => ({
-      walletId: walletBySymbol.get(row.symbol) as string,
+      walletId: payload.walletBySymbol[row.symbol],
       assetId: assetIdBySymbol.get(row.symbol) as string,
       type: row.type,
       executedAt: new Date(row.executedAt),
