@@ -521,6 +521,11 @@ export function FiscaliteView({
                       <span className="font-mono text-xs text-zinc-400">
                         {sale.assetSymbol}
                       </span>
+                      {sale.fromStatement ? (
+                        <span className="mt-0.5 block text-xs text-zinc-400">
+                          relevé bancaire
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
                       {sale.walletName}

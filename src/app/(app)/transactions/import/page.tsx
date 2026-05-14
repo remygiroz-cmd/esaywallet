@@ -2,17 +2,20 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth-server";
 import { getUserWallets } from "@/lib/wallets";
 import { getUserAssets } from "@/lib/assets";
+import { getUserRealizedGainEntries } from "@/lib/realized-gains";
 import { ui } from "@/lib/ui";
 import { MultiImport } from "@/components/multi-import";
 import { CmcImport } from "@/components/cmc-import";
 import { TrImport } from "@/components/tr-import";
 import { TransactionImport } from "@/components/transaction-import";
+import { RealizedGainImport } from "@/components/realized-gain-import";
 
 export default async function TransactionImportPage() {
   const user = await requireUser();
-  const [wallets, assets] = await Promise.all([
+  const [wallets, assets, realizedEntries] = await Promise.all([
     getUserWallets(user.id),
     getUserAssets(user.id),
+    getUserRealizedGainEntries(user.id),
   ]);
 
   const walletOptions = wallets.map((w) => ({
@@ -20,6 +23,17 @@ export default async function TransactionImportPage() {
     name: w.name,
     currency: w.currency,
     type: w.type,
+  }));
+
+  const realizedRows = realizedEntries.map((entry) => ({
+    id: entry.id,
+    year: entry.year,
+    securityName: entry.securityName,
+    securityCode: entry.securityCode,
+    realizedGain: entry.realizedGain.toNumber(),
+    proceeds: entry.proceeds.toNumber(),
+    source: entry.source,
+    walletName: entry.wallet?.name ?? null,
   }));
 
   return (
@@ -62,6 +76,22 @@ export default async function TransactionImportPage() {
               vous laisse choisir le wallet de chaque asset avant l&apos;import.
             </p>
             <MultiImport wallets={walletOptions} />
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Relevé de plus-values (CTO)
+            </h2>
+            <p className={ui.subtle}>
+              Pour un compte-titres, votre banque fournit déjà le récapitulatif
+              fiscal annuel avec la +/- value réalisée par titre. Importez-le
+              directement : ces chiffres font foi et alimentent la page
+              Fiscalité sans avoir à reconstituer chaque achat/vente.
+            </p>
+            <RealizedGainImport
+              wallets={walletOptions}
+              entries={realizedRows}
+            />
           </section>
 
           <section className="flex flex-col gap-3">
