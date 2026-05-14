@@ -29,6 +29,7 @@ model User {
   assets         Asset[]
   snapshots      PortfolioSnapshot[]
   taxAdjustments TaxAdjustment[]
+  priceAlerts    PriceAlert[]
 }
 
 // User-entered figures the app can't derive — currently the
@@ -81,10 +82,31 @@ model Asset {
 
   transactions Transaction[]
   income       Income[]
+  priceAlerts  PriceAlert[]
   price        PriceCache?
 
   @@unique([userId, symbol, type])
   @@index([userId])
+}
+
+// A user-defined price threshold for an asset. Evaluated on every dashboard
+// refresh; once the live price crosses the threshold, triggeredAt is set and
+// the alert surfaces as a banner on the dashboard.
+model PriceAlert {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  direction   String // ABOVE | BELOW
+  threshold   Decimal // price in the asset's quote currency
+  note        String?
+  triggeredAt DateTime? // set when the live price first crosses the threshold
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([assetId])
 }
 
 // Income received from a holding — dividends, coupons, staking rewards or
