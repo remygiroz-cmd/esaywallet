@@ -268,7 +268,8 @@ function TransactionFormBody({
             className={ui.input}
           />
           <span className="text-xs font-normal text-zinc-400">
-            Total réellement déboursé, dans la devise du wallet.
+            Montant investi dans l&apos;asset, dans la devise du wallet (hors
+            frais).
           </span>
         </label>
         <label className={`${ui.label} sm:w-36`}>
