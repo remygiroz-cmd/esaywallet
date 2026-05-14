@@ -9,9 +9,41 @@ import {
 import { parseTrCsv } from "@/lib/import-tr";
 import { ui } from "@/lib/ui";
 
-type WalletOption = { id: string; name: string; currency: string };
+type WalletOption = {
+  id: string;
+  name: string;
+  currency: string;
+  type: string;
+};
 
 const initialState: BulkImportState = {};
+
+const CLASS_LABELS: Record<string, string> = {
+  STOCK: "Wallet pour les actions",
+  ETF: "Wallet pour les ETF / fonds",
+};
+
+// Picks a sensible default wallet for an asset class, by wallet type.
+function defaultWalletId(
+  wallets: WalletOption[],
+  preferredTypes: string[],
+): string {
+  for (const type of preferredTypes) {
+    const match = wallets.find((wallet) => wallet.type === type);
+    if (match) return match.id;
+  }
+  return wallets[0]?.id ?? "";
+}
+
+function defaultWalletForClass(
+  wallets: WalletOption[],
+  assetClass: string,
+): string {
+  if (assetClass === "ETF") {
+    return defaultWalletId(wallets, ["PEA", "CTO"]);
+  }
+  return defaultWalletId(wallets, ["CTO"]);
+}
 
 export function TrImport({ wallets }: { wallets: WalletOption[] }) {
   const [state, formAction, pending] = useActionState(
@@ -67,22 +99,6 @@ export function TrImport({ wallets }: { wallets: WalletOption[] }) {
       <input type="hidden" name="data" value={text} />
 
       <label className={ui.label}>
-        Wallet de destination
-        <select
-          name="walletId"
-          required
-          defaultValue={wallets[0]?.id ?? ""}
-          className={ui.input}
-        >
-          {wallets.map((wallet) => (
-            <option key={wallet.id} value={wallet.id}>
-              {wallet.name} ({wallet.currency})
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className={ui.label}>
         Fichier Trade Republic (.csv)
         <input
           type="file"
@@ -98,19 +114,43 @@ export function TrImport({ wallets }: { wallets: WalletOption[] }) {
       </label>
 
       {preview ? (
-        <div className="rounded-lg border border-black/[.08] bg-zinc-50 p-3 text-sm dark:border-white/[.1] dark:bg-zinc-900">
-          <p className="font-medium text-zinc-700 dark:text-zinc-200">
-            {preview.rows.length} transaction
-            {preview.rows.length === 1 ? "" : "s"} · {preview.isins.length}{" "}
-            asset{preview.isins.length === 1 ? "" : "s"} détecté
-            {preview.isins.length === 1 ? "" : "s"}
-            {preview.skipped > 0
-              ? ` · ${preview.skipped} ligne${
-                  preview.skipped === 1 ? "" : "s"
-                } ignorée${preview.skipped === 1 ? "" : "s"}`
-              : ""}
-          </p>
-        </div>
+        <>
+          <div className="rounded-lg border border-black/[.08] bg-zinc-50 p-3 text-sm dark:border-white/[.1] dark:bg-zinc-900">
+            <p className="font-medium text-zinc-700 dark:text-zinc-200">
+              {preview.rows.length} transaction
+              {preview.rows.length === 1 ? "" : "s"} · {preview.isins.length}{" "}
+              asset{preview.isins.length === 1 ? "" : "s"} détecté
+              {preview.isins.length === 1 ? "" : "s"}
+              {preview.skipped > 0
+                ? ` · ${preview.skipped} ligne${
+                    preview.skipped === 1 ? "" : "s"
+                  } ignorée${preview.skipped === 1 ? "" : "s"}`
+                : ""}
+            </p>
+          </div>
+
+          {preview.classes.length > 0 ? (
+            <div className="flex flex-col gap-4 sm:flex-row">
+              {preview.classes.map((assetClass) => (
+                <label key={assetClass} className={`${ui.label} flex-1`}>
+                  {CLASS_LABELS[assetClass] ?? assetClass}
+                  <select
+                    name={`wallet_${assetClass}`}
+                    required
+                    defaultValue={defaultWalletForClass(wallets, assetClass)}
+                    className={ui.input}
+                  >
+                    {wallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>
+                        {wallet.name} ({wallet.currency})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {state.error ? <p className={ui.errorText}>{state.error}</p> : null}

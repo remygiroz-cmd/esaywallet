@@ -18,6 +18,7 @@ export default async function TransactionImportPage() {
     id: w.id,
     name: w.name,
     currency: w.currency,
+    type: w.type,
   }));
 
   return (

@@ -15,7 +15,7 @@ import {
   updateTransaction,
   deleteTransaction,
   createTransactionsBulk,
-  createWalletTransactionsBulk,
+  createBulkTransactions,
   deleteTransactionsBulk,
 } from "@/lib/transactions";
 import { parseTransactionRows } from "@/lib/import";
@@ -274,18 +274,20 @@ export type BulkImportState = {
   submittedAt?: number;
 };
 
-// Imports a CoinMarketCap "transaction history" CSV: one wallet, many
-// assets. Each token symbol is resolved to a CoinGecko id so live prices
-// work straight away.
+// Imports a CoinMarketCap "transaction history" CSV. Every row is crypto,
+// so it all routes to the chosen crypto wallet. Each token symbol is
+// resolved to a CoinGecko id so live prices work straight away.
 export async function importCmcAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
   const user = await requireUser();
-  const walletId = String(formData.get("walletId") ?? "");
+  const walletId = String(formData.get("wallet_CRYPTO") ?? "");
   const text = String(formData.get("data") ?? "");
 
-  if (!walletId) return { error: "Sélectionnez un wallet." };
+  if (!walletId) {
+    return { error: "Sélectionnez un wallet pour les cryptos." };
+  }
 
   const { rows } = parseCmcCsv(text);
   if (rows.length === 0) {
@@ -320,10 +322,10 @@ export async function importCmcAction(
     assetIdByToken.set(token, asset.id);
   }
 
-  const count = await createWalletTransactionsBulk(
+  const count = await createBulkTransactions(
     user.id,
-    walletId,
     rows.map((row) => ({
+      walletId,
       assetId: assetIdByToken.get(row.token) as string,
       type: row.type,
       executedAt: new Date(row.executedAt),
@@ -347,22 +349,39 @@ export async function importCmcAction(
   };
 }
 
+const TR_CLASS_LABELS: Record<string, string> = {
+  STOCK: "actions",
+  ETF: "ETF / fonds",
+};
+
 // Imports a Trade Republic transaction-history CSV. Securities are
 // identified by ISIN, which is resolved to a Yahoo Finance symbol so live
-// prices work straight away.
+// prices work straight away. Each transaction is routed to a wallet based
+// on its asset class (stocks vs ETFs/funds).
 export async function importTrAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
   const user = await requireUser();
-  const walletId = String(formData.get("walletId") ?? "");
   const text = String(formData.get("data") ?? "");
 
-  if (!walletId) return { error: "Sélectionnez un wallet." };
-
-  const { rows } = parseTrCsv(text);
+  const { rows, classes } = parseTrCsv(text);
   if (rows.length === 0) {
     return { error: "Aucune transaction valide trouvée dans le fichier." };
+  }
+
+  // One destination wallet per asset class found in the file.
+  const walletByClass = new Map<string, string>();
+  for (const assetClass of classes) {
+    const walletId = String(formData.get(`wallet_${assetClass}`) ?? "");
+    if (!walletId) {
+      return {
+        error: `Sélectionnez un wallet pour les ${
+          TR_CLASS_LABELS[assetClass] ?? assetClass
+        }.`,
+      };
+    }
+    walletByClass.set(assetClass, walletId);
   }
 
   // Group rows by ISIN so each security is resolved and created once.
@@ -400,10 +419,10 @@ export async function importTrAction(
     assetIdByIsin.set(isin, asset.id);
   }
 
-  const count = await createWalletTransactionsBulk(
+  const count = await createBulkTransactions(
     user.id,
-    walletId,
     rows.map((row) => ({
+      walletId: walletByClass.get(row.assetType) as string,
       assetId: assetIdByIsin.get(row.isin) as string,
       type: row.type,
       executedAt: new Date(row.executedAt),

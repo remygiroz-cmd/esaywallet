@@ -9,9 +9,26 @@ import {
 import { parseCmcCsv } from "@/lib/import-cmc";
 import { ui } from "@/lib/ui";
 
-type WalletOption = { id: string; name: string; currency: string };
+type WalletOption = {
+  id: string;
+  name: string;
+  currency: string;
+  type: string;
+};
 
 const initialState: BulkImportState = {};
+
+// Picks a sensible default wallet for an asset class, by wallet type.
+function defaultWalletId(
+  wallets: WalletOption[],
+  preferredTypes: string[],
+): string {
+  for (const type of preferredTypes) {
+    const match = wallets.find((wallet) => wallet.type === type);
+    if (match) return match.id;
+  }
+  return wallets[0]?.id ?? "";
+}
 
 export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
   const [state, formAction, pending] = useActionState(
@@ -67,11 +84,11 @@ export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
       <input type="hidden" name="data" value={text} />
 
       <label className={ui.label}>
-        Wallet de destination
+        Wallet pour les cryptos
         <select
-          name="walletId"
+          name="wallet_CRYPTO"
           required
-          defaultValue={wallets[0]?.id ?? ""}
+          defaultValue={defaultWalletId(wallets, ["CRYPTO"])}
           className={ui.input}
         >
           {wallets.map((wallet) => (
