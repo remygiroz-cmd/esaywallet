@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { loadPortfolio } from "@/lib/portfolio-server";
+import { getUserIncome } from "@/lib/income";
 import { buildFxRateMap, convertCurrency } from "@/lib/currency";
 
 // A realised sale, with everything the tax view needs — amounts converted
@@ -21,14 +22,31 @@ export type FiscalSale = {
   realizedGain: number; // EUR
 };
 
+// A received income entry (dividend, coupon, staking, interest), converted
+// to EUR. Dividends and similar income are taxable at the wallet's rate.
+export type FiscalIncome = {
+  id: string;
+  receivedAt: string;
+  kind: string;
+  assetName: string;
+  assetSymbol: string;
+  walletId: string;
+  walletName: string;
+  walletType: string;
+  taxRate: number; // ratio
+  net: number; // EUR, amount net of fees
+};
+
 export type FiscalData = {
   sales: FiscalSale[];
+  income: FiscalIncome[];
   adjustments: { year: number; carryForwardLoss: number }[];
 };
 
 export async function loadFiscalData(userId: string): Promise<FiscalData> {
-  const [portfolio, adjustments, fxRates] = await Promise.all([
+  const [portfolio, income, adjustments, fxRates] = await Promise.all([
     loadPortfolio(userId),
+    getUserIncome(userId),
     prisma.taxAdjustment.findMany({
       where: { userId },
       orderBy: { year: "desc" },
@@ -73,8 +91,28 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
   }
   sales.sort((a, b) => (a.executedAt < b.executedAt ? 1 : -1));
 
+  const incomeRows: FiscalIncome[] = income.map((entry) => {
+    const meta = walletMeta.get(entry.walletId);
+    const currency = meta?.currency ?? entry.wallet.currency;
+    const net = entry.amount.toNumber() - entry.fees.toNumber();
+    return {
+      id: entry.id,
+      receivedAt: entry.receivedAt.toISOString(),
+      kind: entry.kind,
+      assetName: entry.asset.name,
+      assetSymbol: entry.asset.symbol,
+      walletId: entry.walletId,
+      walletName: entry.wallet.name,
+      walletType: meta?.type ?? "OTHER",
+      taxRate: meta?.taxRate ?? 0.3,
+      net: toEur(net, currency),
+    };
+  });
+  incomeRows.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
+
   return {
     sales,
+    income: incomeRows,
     adjustments: adjustments.map((adjustment) => ({
       year: adjustment.year,
       carryForwardLoss: adjustment.carryForwardLoss.toNumber(),

@@ -5,7 +5,8 @@ import {
   saveTaxAdjustmentAction,
   type TaxAdjustmentState,
 } from "@/app/(app)/fiscalite/actions";
-import type { FiscalSale } from "@/lib/fiscalite";
+import type { FiscalSale, FiscalIncome } from "@/lib/fiscalite";
+import { INCOME_KIND_LABELS, type IncomeKind } from "@/lib/constants";
 import {
   formatCurrency,
   formatSignedCurrency,
@@ -18,6 +19,7 @@ import { GainBadge } from "./gain-badge";
 
 type Props = {
   sales: FiscalSale[];
+  income: FiscalIncome[];
   adjustments: { year: number; carryForwardLoss: number }[];
 };
 
@@ -27,15 +29,18 @@ function csvField(value: string | number): string {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
-export function FiscaliteView({ sales, adjustments }: Props) {
+export function FiscaliteView({ sales, income, adjustments }: Props) {
   const availableYears = useMemo(
     () =>
       [
-        ...new Set(
-          sales.map((sale) => new Date(sale.executedAt).getFullYear()),
-        ),
+        ...new Set([
+          ...sales.map((sale) => new Date(sale.executedAt).getFullYear()),
+          ...income.map((entry) =>
+            new Date(entry.receivedAt).getFullYear(),
+          ),
+        ]),
       ].sort((a, b) => b - a),
-    [sales],
+    [sales, income],
   );
 
   const currentYear = new Date().getFullYear();
@@ -63,6 +68,20 @@ export function FiscaliteView({ sales, adjustments }: Props) {
     });
   }, [sales, mode, year, from, to]);
 
+  const filteredIncome = useMemo(() => {
+    if (mode === "year") {
+      return income.filter(
+        (entry) => new Date(entry.receivedAt).getFullYear() === year,
+      );
+    }
+    const fromTime = from ? new Date(from).getTime() : -Infinity;
+    const toTime = to ? new Date(`${to}T23:59:59`).getTime() : Infinity;
+    return income.filter((entry) => {
+      const time = new Date(entry.receivedAt).getTime();
+      return time >= fromTime && time <= toTime;
+    });
+  }, [income, mode, year, from, to]);
+
   const carryForward =
     mode === "year"
       ? (adjustments.find((a) => a.year === year)?.carryForwardLoss ?? 0)
@@ -71,25 +90,42 @@ export function FiscaliteView({ sales, adjustments }: Props) {
   const summary = useMemo(() => {
     const perWallet = new Map<
       string,
-      { name: string; taxRate: number; realizedGain: number; count: number }
+      {
+        name: string;
+        taxRate: number;
+        realizedGain: number;
+        count: number;
+        income: number;
+        incomeCount: number;
+      }
     >();
     const perAsset = new Map<
       string,
       { name: string; symbol: string; realizedGain: number; count: number }
     >();
     let netRealized = 0;
+    let totalIncome = 0;
+
+    const getWallet = (id: string, name: string, taxRate: number) => {
+      const existing = perWallet.get(id);
+      if (existing) return existing;
+      const created = {
+        name,
+        taxRate,
+        realizedGain: 0,
+        count: 0,
+        income: 0,
+        incomeCount: 0,
+      };
+      perWallet.set(id, created);
+      return created;
+    };
 
     for (const sale of filtered) {
       netRealized += sale.realizedGain;
-      const wallet = perWallet.get(sale.walletId) ?? {
-        name: sale.walletName,
-        taxRate: sale.taxRate,
-        realizedGain: 0,
-        count: 0,
-      };
+      const wallet = getWallet(sale.walletId, sale.walletName, sale.taxRate);
       wallet.realizedGain += sale.realizedGain;
       wallet.count += 1;
-      perWallet.set(sale.walletId, wallet);
 
       const asset = perAsset.get(sale.assetId) ?? {
         name: sale.assetName,
@@ -102,15 +138,28 @@ export function FiscaliteView({ sales, adjustments }: Props) {
       perAsset.set(sale.assetId, asset);
     }
 
+    for (const entry of filteredIncome) {
+      totalIncome += entry.net;
+      const wallet = getWallet(
+        entry.walletId,
+        entry.walletName,
+        entry.taxRate,
+      );
+      wallet.income += entry.net;
+      wallet.incomeCount += 1;
+    }
+
     const wallets = [...perWallet.values()].sort(
-      (a, b) => b.realizedGain - a.realizedGain,
+      (a, b) =>
+        b.realizedGain + b.income - (a.realizedGain + a.income),
     );
     const assets = [...perAsset.values()].sort(
       (a, b) => b.realizedGain - a.realizedGain,
     );
 
     // Carry-forward losses reduce each wallet's taxable gain, distributed
-    // proportionally to its positive realised gain.
+    // proportionally to its positive realised gain. Income (dividends, etc.)
+    // is taxed separately at the wallet's rate, without carry-forward.
     const totalPositive = wallets.reduce(
       (sum, w) => sum + Math.max(0, w.realizedGain),
       0,
@@ -121,16 +170,18 @@ export function FiscaliteView({ sales, adjustments }: Props) {
       const share =
         totalPositive > 0 ? carryForward * (positive / totalPositive) : 0;
       estimatedTax += Math.max(0, wallet.realizedGain - share) * wallet.taxRate;
+      estimatedTax += Math.max(0, wallet.income) * wallet.taxRate;
     }
 
     return {
       wallets,
       assets,
       netRealized,
+      totalIncome,
       netTaxable: Math.max(0, netRealized - carryForward),
       estimatedTax,
     };
-  }, [filtered, carryForward]);
+  }, [filtered, filteredIncome, carryForward]);
 
   function exportCsv() {
     const header = [
@@ -257,11 +308,20 @@ export function FiscaliteView({ sales, adjustments }: Props) {
             </p>
           </div>
           <div>
+            <p className="text-base font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
+              {formatCurrency(summary.totalIncome, "EUR")}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Revenus perçus ({filteredIncome.length} versement
+              {filteredIncome.length === 1 ? "" : "s"})
+            </p>
+          </div>
+          <div>
             <p className="text-base font-medium text-zinc-600 tabular-nums dark:text-zinc-300">
               {formatCurrency(summary.estimatedTax, "EUR")}
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Impôt estimé
+              Impôt estimé (ventes + revenus)
             </p>
           </div>
         </div>
@@ -288,10 +348,10 @@ export function FiscaliteView({ sales, adjustments }: Props) {
           Par wallet
         </h2>
         {summary.wallets.length === 0 ? (
-          <p className={ui.subtle}>Aucune vente sur cette période.</p>
+          <p className={ui.subtle}>Aucune vente ni revenu sur cette période.</p>
         ) : (
           <div className={`${ui.card} overflow-x-auto p-0`}>
-            <table className="w-full min-w-[36rem] text-sm">
+            <table className="w-full min-w-[42rem] text-sm">
               <thead>
                 <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
                   <th className="px-4 py-3 font-medium">Wallet</th>
@@ -300,6 +360,7 @@ export function FiscaliteView({ sales, adjustments }: Props) {
                   <th className="px-4 py-3 text-right font-medium">
                     +/- value réalisée
                   </th>
+                  <th className="px-4 py-3 text-right font-medium">Revenus</th>
                   <th className="px-4 py-3 text-right font-medium">
                     Impôt estimé
                   </th>
@@ -328,9 +389,16 @@ export function FiscaliteView({ sales, adjustments }: Props) {
                         size="sm"
                       />
                     </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {wallet.income > 0
+                        ? formatCurrency(wallet.income, "EUR")
+                        : "—"}
+                    </td>
                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
                       {formatCurrency(
-                        Math.max(0, wallet.realizedGain) * wallet.taxRate,
+                        (Math.max(0, wallet.realizedGain) +
+                          Math.max(0, wallet.income)) *
+                          wallet.taxRate,
                         "EUR",
                       )}
                     </td>
@@ -414,6 +482,62 @@ export function FiscaliteView({ sales, adjustments }: Props) {
                         currency="EUR"
                         size="sm"
                       />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Income detail */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Détail des revenus
+        </h2>
+        {filteredIncome.length === 0 ? (
+          <p className={ui.subtle}>Aucun revenu sur cette période.</p>
+        ) : (
+          <div className={`${ui.card} overflow-x-auto p-0`}>
+            <table className="w-full min-w-[40rem] text-sm">
+              <thead>
+                <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
+                  <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Asset</th>
+                  <th className="px-4 py-3 font-medium">Wallet</th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    Montant net
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredIncome.map((entry) => (
+                  <tr
+                    key={entry.id}
+                    className="border-b border-black/[.05] last:border-0 dark:border-white/[.06]"
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                      {formatDate(entry.receivedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
+                      {INCOME_KIND_LABELS[entry.kind as IncomeKind] ??
+                        entry.kind}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-black dark:text-zinc-50">
+                        {entry.assetName}
+                      </span>{" "}
+                      <span className="font-mono text-xs text-zinc-400">
+                        {entry.assetSymbol}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
+                      {entry.walletName}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(entry.net, "EUR")}
                     </td>
                   </tr>
                 ))}

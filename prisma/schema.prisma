@@ -59,6 +59,7 @@ model Wallet {
   updatedAt DateTime @updatedAt
 
   transactions Transaction[]
+  income       Income[]
   snapshots    PortfolioSnapshot[]
 
   @@index([userId])
@@ -79,10 +80,31 @@ model Asset {
   updatedAt     DateTime @updatedAt
 
   transactions Transaction[]
+  income       Income[]
   price        PriceCache?
 
   @@unique([userId, symbol, type])
   @@index([userId])
+}
+
+// Income received from a holding — dividends, coupons, staking rewards or
+// interest. Tracked separately from buy/sell transactions.
+model Income {
+  id         String   @id @default(cuid())
+  walletId   String
+  wallet     Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  kind       String // DIVIDEND | COUPON | STAKING | INTEREST
+  receivedAt DateTime
+  amount     Decimal // gross income received, in the wallet currency
+  fees       Decimal  @default(0)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([walletId])
+  @@index([assetId])
 }
 
 model Transaction {
