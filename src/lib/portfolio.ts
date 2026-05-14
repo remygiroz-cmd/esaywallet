@@ -45,6 +45,7 @@ export type PortfolioInput = {
     assetId: string;
     price: number;
     currency: string;
+    change24h: number | null;
     fetchedAt: string;
   }[];
   fxRates: { quote: string; rate: number }[];
@@ -101,6 +102,9 @@ export type AssetComputation = {
   realizedGain: number; // reference currency
   currentPrice: number | null;
   currentPriceCurrency: string | null;
+  currentPriceEur: number | null;
+  currentPriceUsd: number | null;
+  dailyChangePct: number | null; // ratio, e.g. 0.025 = +2.5% over 24h
   hasMissingPrice: boolean;
   hasSales: boolean;
   lots: LotComputation[];
@@ -189,7 +193,13 @@ export function computePortfolio(
   }
 
   const wallets = aggregateWallets(input.wallets, positions);
-  const assets = aggregateAssets(input.assets, positions, priceByAsset, toReference);
+  const assets = aggregateAssets(
+    input.assets,
+    positions,
+    priceByAsset,
+    toReference,
+    fx,
+  );
 
   let totalCost = 0;
   let currentValue = 0;
@@ -395,6 +405,7 @@ function aggregateAssets(
   positions: PositionComputation[],
   priceByAsset: Map<string, PortfolioInput["prices"][number]>,
   toReference: (amount: number, from: string) => number,
+  fx: ReturnType<typeof buildFxRateMap>,
 ): AssetComputation[] {
   return assets
     .map((asset) => {
@@ -455,6 +466,14 @@ function aggregateAssets(
         realizedGain,
         currentPrice: price?.price ?? null,
         currentPriceCurrency: price?.currency ?? null,
+        currentPriceEur: price
+          ? convertCurrency(price.price, price.currency, "EUR", fx)
+          : null,
+        currentPriceUsd: price
+          ? convertCurrency(price.price, price.currency, "USD", fx)
+          : null,
+        dailyChangePct:
+          price && price.change24h !== null ? price.change24h / 100 : null,
         hasMissingPrice,
         hasSales,
         lots: lots.sort((a, b) =>

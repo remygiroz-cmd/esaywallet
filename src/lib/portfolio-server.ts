@@ -48,6 +48,7 @@ export async function loadPortfolioInput(
       assetId: price.assetId,
       price: price.price.toNumber(),
       currency: price.currency,
+      change24h: price.change24h,
       fetchedAt: price.fetchedAt.toISOString(),
     })),
     fxRates: fxRates.map((rate) => ({

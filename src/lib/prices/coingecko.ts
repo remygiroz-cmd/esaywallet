@@ -2,8 +2,13 @@ import "server-only";
 
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 
-// Maps a CoinGecko id to its price in each requested currency (upper-cased).
-export type CryptoPriceMap = Map<string, Record<string, number>>;
+// For a CoinGecko id: the price in each requested currency, and the 24h
+// change (as a percentage) in each currency.
+export type CryptoQuote = {
+  prices: Record<string, number>;
+  changes: Record<string, number>;
+};
+export type CryptoPriceMap = Map<string, CryptoQuote>;
 
 // Batched price lookup — one request covers every crypto the user holds.
 export async function fetchCryptoPrices(
@@ -16,6 +21,7 @@ export async function fetchCryptoPrices(
   const params = new URLSearchParams({
     ids: ids.join(","),
     vs_currencies: currencies.map((c) => c.toLowerCase()).join(","),
+    include_24hr_change: "true",
   });
 
   const headers: Record<string, string> = { accept: "application/json" };
@@ -33,12 +39,17 @@ export async function fetchCryptoPrices(
   }
 
   const data = (await res.json()) as Record<string, Record<string, number>>;
-  for (const [id, prices] of Object.entries(data)) {
-    const normalized: Record<string, number> = {};
-    for (const [currency, value] of Object.entries(prices)) {
-      normalized[currency.toUpperCase()] = value;
+  for (const [id, entry] of Object.entries(data)) {
+    const prices: Record<string, number> = {};
+    const changes: Record<string, number> = {};
+    for (const [key, value] of Object.entries(entry)) {
+      if (key.endsWith("_24h_change")) {
+        changes[key.replace("_24h_change", "").toUpperCase()] = value;
+      } else {
+        prices[key.toUpperCase()] = value;
+      }
     }
-    result.set(id, normalized);
+    result.set(id, { prices, changes });
   }
   return result;
 }

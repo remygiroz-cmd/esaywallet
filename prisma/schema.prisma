@@ -94,6 +94,8 @@ model PriceCache {
   asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
   price     Decimal
   currency  String
+  // 24-hour price change, as a percentage (e.g. 2.5 = +2.5%).
+  change24h Float?
   fetchedAt DateTime @default(now())
 }
 
