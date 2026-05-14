@@ -122,9 +122,89 @@ export async function searchAssets(
   return [...stocks, ...crypto].slice(0, 12);
 }
 
-// Resolves an ISIN (or ticker) to a Yahoo Finance symbol, used when
-// importing a broker file that identifies securities by ISIN. Yahoo's
-// search resolves ISINs and ranks results by relevance.
+// Resolves any identifier (ticker, ISIN or crypto symbol) to a fully
+// populated asset, picking the right price provider. Used by the universal
+// importer, where the kind of asset isn't known upfront.
+export type ResolvedAsset = {
+  symbol: string;
+  name: string;
+  type: "STOCK" | "ETF" | "CRYPTO";
+  quoteCurrency: string;
+  coingeckoId: string | null;
+  yahooSymbol: string | null;
+};
+
+export async function resolveGenericAsset(
+  rawSymbol: string,
+  kind: "auto" | "crypto" | "equity",
+  classHint: "STOCK" | "ETF" | "CRYPTO" | null,
+  fallbackName: string,
+  fallbackCurrency: string,
+): Promise<ResolvedAsset> {
+  const wantsCrypto =
+    kind === "crypto" || (kind === "auto" && classHint === "CRYPTO");
+  const wantsEquity =
+    kind === "equity" ||
+    (kind === "auto" && (classHint === "STOCK" || classHint === "ETF"));
+
+  if (wantsCrypto) {
+    const coin = await resolveCoingeckoId(rawSymbol).catch(() => null);
+    return {
+      symbol: rawSymbol.toUpperCase(),
+      name: coin?.name ?? fallbackName,
+      type: "CRYPTO",
+      quoteCurrency: "EUR",
+      coingeckoId: coin?.id ?? null,
+      yahooSymbol: null,
+    };
+  }
+
+  if (wantsEquity) {
+    const quote = await resolveYahooSymbol(rawSymbol).catch(() => null);
+    return {
+      symbol: quote?.symbol ?? rawSymbol.toUpperCase(),
+      name: quote?.name ?? fallbackName,
+      type: classHint === "ETF" ? "ETF" : "STOCK",
+      quoteCurrency: fallbackCurrency || "EUR",
+      coingeckoId: null,
+      yahooSymbol: quote?.symbol ?? null,
+    };
+  }
+
+  // Auto with no hint: an ISIN/ticker resolves on Yahoo, otherwise try
+  // CoinGecko for crypto tickers.
+  const quote = await resolveYahooSymbol(rawSymbol).catch(() => null);
+  if (quote) {
+    return {
+      symbol: quote.symbol,
+      name: quote.name,
+      type: "STOCK",
+      quoteCurrency: fallbackCurrency || "EUR",
+      coingeckoId: null,
+      yahooSymbol: quote.symbol,
+    };
+  }
+  const coin = await resolveCoingeckoId(rawSymbol).catch(() => null);
+  if (coin) {
+    return {
+      symbol: rawSymbol.toUpperCase(),
+      name: coin.name,
+      type: "CRYPTO",
+      quoteCurrency: "EUR",
+      coingeckoId: coin.id,
+      yahooSymbol: null,
+    };
+  }
+
+  return {
+    symbol: rawSymbol.toUpperCase(),
+    name: fallbackName,
+    type: "STOCK",
+    quoteCurrency: fallbackCurrency || "EUR",
+    coingeckoId: null,
+    yahooSymbol: null,
+  };
+}
 export async function resolveYahooSymbol(
   query: string,
 ): Promise<{ symbol: string; name: string } | null> {
