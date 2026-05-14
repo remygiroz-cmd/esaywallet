@@ -133,3 +133,36 @@ export async function createTransactionsBulk(
   });
   return result.count;
 }
+
+// Inserts many transactions into one wallet, each carrying its own asset
+// (used by the CoinMarketCap import, which spans several assets at once).
+export async function createWalletTransactionsBulk(
+  userId: string,
+  walletId: string,
+  rows: (BulkTransactionRow & { assetId: string })[],
+): Promise<number | null> {
+  const wallet = await prisma.wallet.findFirst({
+    where: { id: walletId, userId },
+  });
+  if (!wallet) return null;
+
+  const assetIds = [...new Set(rows.map((row) => row.assetId))];
+  const ownedAssets = await prisma.asset.count({
+    where: { id: { in: assetIds }, userId },
+  });
+  if (ownedAssets !== assetIds.length) return null;
+
+  const result = await prisma.transaction.createMany({
+    data: rows.map((row) => ({
+      walletId,
+      assetId: row.assetId,
+      type: row.type,
+      executedAt: row.executedAt,
+      unitPrice: row.unitPrice,
+      quantity: row.quantity,
+      amountInvested: row.amountInvested,
+      fees: row.fees,
+    })),
+  });
+  return result.count;
+}
