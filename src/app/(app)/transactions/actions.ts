@@ -15,6 +15,7 @@ import {
   updateTransaction,
   deleteTransaction,
   createTransactionsBulk,
+  deleteTransactionsBulk,
 } from "@/lib/transactions";
 import { parseTransactionRows } from "@/lib/import";
 
@@ -179,6 +180,33 @@ export async function deleteTransactionAction(
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
   redirect("/transactions");
+}
+
+export type BulkDeleteState = {
+  error?: string;
+  deleted?: number;
+  submittedAt?: number;
+};
+
+export async function deleteTransactionsBulkAction(
+  _prev: BulkDeleteState,
+  formData: FormData,
+): Promise<BulkDeleteState> {
+  const user = await requireUser();
+  const ids = formData
+    .getAll("ids")
+    .map((value) => String(value))
+    .filter(Boolean);
+
+  if (ids.length === 0) {
+    return { error: "Aucune transaction sélectionnée." };
+  }
+
+  const deleted = await deleteTransactionsBulk(user.id, ids);
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/wallets/[id]", "page");
+  return { deleted, submittedAt: Date.now() };
 }
 
 export type ImportFormState = {

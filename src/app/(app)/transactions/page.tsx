@@ -4,16 +4,12 @@ import { getUserWallets } from "@/lib/wallets";
 import { getUserAssets } from "@/lib/assets";
 import { getUserTransactions } from "@/lib/transactions";
 import { ui } from "@/lib/ui";
-import {
-  formatCurrency,
-  formatQuantity,
-  formatDate,
-  toDateInputValue,
-} from "@/lib/format";
+import { toDateInputValue } from "@/lib/format";
 import { TransactionForm } from "@/components/transaction-form";
-import { TransactionTypeBadge } from "@/components/transaction-type-badge";
-import { DeleteButton } from "@/components/delete-button";
-import { deleteTransactionAction } from "./actions";
+import {
+  TransactionTable,
+  type TransactionRow,
+} from "@/components/transaction-table";
 
 export default async function TransactionsPage() {
   const user = await requireUser();
@@ -22,6 +18,20 @@ export default async function TransactionsPage() {
     getUserAssets(user.id),
     getUserTransactions(user.id),
   ]);
+
+  const rows: TransactionRow[] = transactions.map((tx) => ({
+    id: tx.id,
+    executedAt: tx.executedAt.toISOString(),
+    type: tx.type,
+    assetName: tx.asset.name,
+    assetSymbol: tx.asset.symbol,
+    walletName: tx.wallet.name,
+    quantity: tx.quantity.toNumber(),
+    unitPrice: tx.unitPrice.toNumber(),
+    quoteCurrency: tx.asset.quoteCurrency,
+    amountInvested: tx.amountInvested.toNumber(),
+    walletCurrency: tx.wallet.currency,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -66,86 +76,12 @@ export default async function TransactionsPage() {
         />
       )}
 
-      {transactions.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-black/[.15] bg-white p-8 text-center text-sm text-zinc-500 dark:border-white/[.15] dark:bg-zinc-950 dark:text-zinc-400">
           Aucune transaction enregistrée.
         </div>
       ) : (
-        <div className={`${ui.card} overflow-x-auto p-0`}>
-          <table className="w-full min-w-[44rem] text-sm">
-            <thead>
-              <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Asset</th>
-                <th className="px-4 py-3 font-medium">Wallet</th>
-                <th className="px-4 py-3 text-right font-medium">Quantité</th>
-                <th className="px-4 py-3 text-right font-medium">
-                  Prix unitaire
-                </th>
-                <th className="px-4 py-3 text-right font-medium">Montant</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((tx) => (
-                <tr
-                  key={tx.id}
-                  className="border-b border-black/[.05] last:border-0 dark:border-white/[.06]"
-                >
-                  <td className="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
-                    {formatDate(tx.executedAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <TransactionTypeBadge type={tx.type} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-black dark:text-zinc-50">
-                      {tx.asset.name}
-                    </span>{" "}
-                    <span className="font-mono text-xs text-zinc-400">
-                      {tx.asset.symbol}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
-                    {tx.wallet.name}
-                  </td>
-                  <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
-                    {formatQuantity(tx.quantity.toNumber())}
-                  </td>
-                  <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
-                    {formatCurrency(
-                      tx.unitPrice.toNumber(),
-                      tx.asset.quoteCurrency,
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium text-black dark:text-zinc-50">
-                    {formatCurrency(
-                      tx.amountInvested.toNumber(),
-                      tx.wallet.currency,
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-3">
-                      <Link
-                        href={`/transactions/${tx.id}`}
-                        className="text-xs text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400"
-                      >
-                        Modifier
-                      </Link>
-                      <DeleteButton
-                        action={deleteTransactionAction}
-                        id={tx.id}
-                        label="Suppr."
-                        confirmMessage="Supprimer cette transaction ?"
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TransactionTable rows={rows} showWallet />
       )}
     </div>
   );

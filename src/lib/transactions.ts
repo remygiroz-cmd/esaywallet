@@ -94,6 +94,19 @@ export function deleteTransaction(id: string, userId: string) {
   return prisma.transaction.deleteMany({ where: { id, wallet: { userId } } });
 }
 
+// Deletes many transactions at once. Scoped through the wallet so a user
+// can only ever delete their own. Returns the number actually deleted.
+export async function deleteTransactionsBulk(
+  userId: string,
+  ids: string[],
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const result = await prisma.transaction.deleteMany({
+    where: { id: { in: ids }, wallet: { userId } },
+  });
+  return result.count;
+}
+
 export type BulkTransactionRow = {
   type: TransactionType;
   executedAt: Date;
