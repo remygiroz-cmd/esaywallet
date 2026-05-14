@@ -1,8 +1,8 @@
 // easyWallet — data model
 // Docs: https://pris.ly/d/prisma-schema
 //
-// Note: SQLite (dev) does not support native enums, so "type" fields are
-// stored as String. Allowed values are documented inline and enforced in
+// Note: "type" fields are stored as String rather than native enums to keep
+// the model portable. Allowed values are documented inline and enforced in
 // application code (see src/lib/constants.ts).
 
 generator client {
@@ -10,8 +10,11 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection (Supabase transaction pooler) used at runtime.
+  url       = env("DATABASE_URL")
+  // Direct connection used for migrations.
+  directUrl = env("DIRECT_URL")
 }
 
 model User {

@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# easyWallet
 
-## Getting Started
+Suivi d'investissements en temps réel — actions, ETF et cryptomonnaies
+répartis dans plusieurs wallets (CTO, PEA, crypto…), avec calcul en direct
+des plus et moins-values à quatre niveaux : par achat, par asset, par wallet
+et sur l'ensemble du patrimoine.
 
-First, run the development server:
+## Fonctionnalités
+
+- **Comptes utilisateurs** — inscription / connexion par email + mot de passe.
+- **Wallets** — CTO, PEA, portefeuille crypto, livret… chacun dans sa devise.
+- **Transactions** — achats et ventes : asset, date, prix unitaire, montant,
+  quantité et frais.
+- **Prix en direct** — CoinGecko (crypto), Yahoo Finance (actions/ETF) et
+  taux de change Frankfurter, mis en cache et rafraîchis chaque minute.
+- **Tableau de bord live** — plus/moins-value latente par achat, par asset,
+  par wallet et au global, plus-value réalisée et estimation fiscale.
+- **Historique** — courbe d'évolution de la valeur du portefeuille.
+
+## Stack
+
+Next.js 16 (App Router) · TypeScript · Tailwind CSS · Prisma · PostgreSQL ·
+TanStack Query · Recharts.
+
+## Développement local
+
+Prérequis : Node.js 22+ et une base PostgreSQL (par exemple un projet
+Supabase, ou un PostgreSQL local).
 
 ```bash
+# 1. Dépendances
+npm install
+
+# 2. Variables d'environnement
+cp .env.example .env
+# puis renseignez DATABASE_URL, DIRECT_URL et AUTH_SECRET dans .env
+# (générez le secret : node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+
+# 3. Schéma de base de données
+npx prisma migrate deploy
+
+# 4. Serveur de développement
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+L'application est disponible sur http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Déploiement (Vercel + Supabase)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Créer un projet **Supabase** et récupérer les chaînes de connexion Prisma
+   (onglet *Connect → ORMs*).
+2. Importer le dépôt dans **Vercel** (le framework Next.js est détecté
+   automatiquement ; la commande de build est définie dans `vercel.json`).
+3. Dans les variables d'environnement Vercel, renseigner :
+   - `DATABASE_URL` — connexion poolée Supabase (port 6543, `?pgbouncer=true`)
+   - `DIRECT_URL` — connexion directe Supabase (port 5432)
+   - `AUTH_SECRET` — secret aléatoire de 32 octets
+   - `COINGECKO_API_KEY` *(optionnel)* — clé démo CoinGecko pour relever la
+     limite de requêtes
+4. Le build Vercel exécute automatiquement les migrations Prisma
+   (`prisma migrate deploy`) avant de compiler l'application.
 
-## Learn More
+## Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+  app/
+    (auth)/          inscription, connexion
+    (app)/           espace authentifié — dashboard, wallets, assets, transactions
+    api/             routes API (prix, tableau de bord)
+  components/        composants UI
+  lib/
+    portfolio.ts     moteur de calcul des plus/moins-values (pur, testable)
+    prices/          service de prix (CoinGecko, Yahoo, change)
+    auth.ts          sessions JWT
+prisma/
+  schema.prisma      modèle de données
+  migrations/        migrations PostgreSQL
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Les estimations fiscales (PFU 30 % en CTO/crypto, 17,2 % en PEA) sont
+purement indicatives — la fiscalité réelle dépend de votre situation et de
+la durée de détention.
