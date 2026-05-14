@@ -55,11 +55,19 @@ export default async function WalletsPage() {
                   {wallet._count.transactions} transaction
                   {wallet._count.transactions === 1 ? "" : "s"}
                 </span>
-                <DeleteButton
-                  action={deleteWalletAction}
-                  id={wallet.id}
-                  confirmMessage={`Supprimer le wallet « ${wallet.name} » ? Toutes ses transactions seront aussi supprimées.`}
-                />
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/wallets/${wallet.id}`}
+                    className="rounded-lg border border-black/[.12] px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-white/[.16] dark:text-zinc-400 dark:hover:bg-zinc-900"
+                  >
+                    Modifier
+                  </Link>
+                  <DeleteButton
+                    action={deleteWalletAction}
+                    id={wallet.id}
+                    confirmMessage={`Supprimer le wallet « ${wallet.name} » ? Toutes ses transactions seront aussi supprimées.`}
+                  />
+                </div>
               </div>
             </li>
           ))}
