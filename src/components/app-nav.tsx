@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "/assets", label: "Assets" },
   { href: "/transactions", label: "Transactions" },
   { href: "/revenus", label: "Revenus" },
+  { href: "/alertes", label: "Alertes" },
   { href: "/fiscalite", label: "Fiscalité" },
 ];
 

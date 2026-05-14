@@ -49,6 +49,14 @@ export const INCOME_KIND_LABELS: Record<IncomeKind, string> = {
   INTEREST: "Intérêts",
 };
 
+export const ALERT_DIRECTIONS = ["ABOVE", "BELOW"] as const;
+export type AlertDirection = (typeof ALERT_DIRECTIONS)[number];
+
+export const ALERT_DIRECTION_LABELS: Record<AlertDirection, string> = {
+  ABOVE: "Au-dessus de",
+  BELOW: "En dessous de",
+};
+
 // Indicative French tax rates applied to net realised gains, by wallet type:
 //  - CTO / crypto / autre : flat tax (PFU) 30 %
 //  - PEA : income-tax exempt, only social contributions (17,2 %)

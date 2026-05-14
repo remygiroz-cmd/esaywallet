@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth-server";
 import { refreshPrices } from "@/lib/prices/service";
 import { loadPortfolio } from "@/lib/portfolio-server";
 import { getIncomeTotalByCurrency } from "@/lib/income";
+import { evaluateAlerts, getTriggeredAlerts } from "@/lib/alerts";
 import { recordGlobalSnapshot, getGlobalSnapshots } from "@/lib/snapshots";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,10 @@ export async function GET() {
   const portfolio = await loadPortfolio(user.id);
   const incomeByCurrency = await getIncomeTotalByCurrency(user.id);
 
+  // Live prices were just refreshed — check the alert thresholds against them.
+  await evaluateAlerts(user.id);
+  const alerts = await getTriggeredAlerts(user.id);
+
   await recordGlobalSnapshot(
     user.id,
     portfolio.currentValue,
@@ -33,5 +38,6 @@ export async function GET() {
     history,
     refresh,
     income: Object.fromEntries(incomeByCurrency),
+    alerts,
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   PortfolioComputation,
@@ -9,9 +9,12 @@ import type {
   SaleComputation,
   PortfolioSnapshotPoint,
 } from "@/lib/portfolio";
+import type { TriggeredAlert } from "@/lib/alerts";
+import { dismissAlertAction } from "@/app/(app)/alertes/actions";
 import {
   ASSET_TYPES,
   ASSET_TYPE_LABELS,
+  ALERT_DIRECTION_LABELS,
   type AssetType,
 } from "@/lib/constants";
 import {
@@ -34,6 +37,7 @@ type DashboardResponse = {
   history: PortfolioSnapshotPoint[];
   refresh: { refreshedAt: string; updated: number; errors: string[] };
   income: Record<string, number>;
+  alerts: TriggeredAlert[];
 };
 
 async function fetchDashboard(): Promise<DashboardResponse> {
@@ -48,10 +52,12 @@ export function DashboardLive({
   initialPortfolio,
   initialHistory,
   initialIncome,
+  initialAlerts,
 }: {
   initialPortfolio: PortfolioComputation;
   initialHistory: PortfolioSnapshotPoint[];
   initialIncome: Record<string, number>;
+  initialAlerts: TriggeredAlert[];
 }) {
   const { data, isFetching, isPlaceholderData, refetch } =
     useQuery<DashboardResponse>({
@@ -67,11 +73,13 @@ export function DashboardLive({
           errors: [],
         },
         income: initialIncome,
+        alerts: initialAlerts,
       },
     });
 
   // `data` is always defined here thanks to placeholderData.
-  const { portfolio, history, refresh, income } = data as DashboardResponse;
+  const { portfolio, history, refresh, income, alerts } =
+    data as DashboardResponse;
   const hasTransactions = portfolio.assets.length > 0;
 
   // The "focused" wallet: its card is expanded and the assets list below
@@ -100,6 +108,10 @@ export function DashboardLive({
           {isFetching ? "Actualisation…" : "Actualiser"}
         </button>
       </header>
+
+      {alerts.length > 0 ? (
+        <AlertsBanner alerts={alerts} onChange={() => refetch()} />
+      ) : null}
 
       {portfolio.wallets.length === 0 ? (
         <EmptyState
@@ -380,6 +392,63 @@ function RealizedSummary({ portfolio }: { portfolio: PortfolioComputation }) {
         fiscalité réelle dépend de votre situation et de la durée de
         détention.
       </p>
+    </div>
+  );
+}
+
+function AlertsBanner({
+  alerts,
+  onChange,
+}: {
+  alerts: TriggeredAlert[];
+  onChange: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+
+  function dismiss(id: string) {
+    startTransition(async () => {
+      await dismissAlertAction(id);
+      onChange();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/60">
+      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+        {alerts.length} alerte{alerts.length === 1 ? "" : "s"} de prix
+        déclenchée{alerts.length === 1 ? "" : "s"}
+      </p>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {alerts.map((alert) => (
+          <li
+            key={alert.id}
+            className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-700 dark:text-amber-300"
+          >
+            <span>
+              <span className="font-medium">{alert.assetName}</span>{" "}
+              <span className="font-mono text-xs">{alert.assetSymbol}</span> —{" "}
+              {ALERT_DIRECTION_LABELS[alert.direction].toLowerCase()}{" "}
+              {formatCurrency(alert.threshold, alert.currency)}
+              {alert.currentPrice !== null ? (
+                <>
+                  {" "}
+                  (cours :{" "}
+                  {formatCurrency(alert.currentPrice, alert.currency)})
+                </>
+              ) : null}
+              {alert.note ? ` · ${alert.note}` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => dismiss(alert.id)}
+              disabled={pending}
+              className="rounded-md border border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-60 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-900"
+            >
+              Effacer
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
