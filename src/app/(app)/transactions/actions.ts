@@ -22,6 +22,7 @@ import {
 import { parseTransactionRows } from "@/lib/import";
 import { parseCmcCsv } from "@/lib/import-cmc";
 import { parseBitstackCsv } from "@/lib/import-bitstack";
+import { parseBinanceCsv } from "@/lib/import-binance";
 import { parseTrCsv } from "@/lib/import-tr";
 import type { ImportPayloadRow } from "@/lib/import-multi";
 import {
@@ -441,6 +442,103 @@ export async function importBitstackAction(
       name: resolved?.name ?? token,
       type: "CRYPTO",
       quoteCurrency: "EUR",
+      coingeckoId: resolved?.id ?? null,
+      yahooSymbol: null,
+    });
+    assetIdByToken.set(token, asset.id);
+  }
+
+  const count = await createBulkTransactions(
+    user.id,
+    rows.map((row) => ({
+      walletId: walletByToken.get(row.token) as string,
+      assetId: assetIdByToken.get(row.token) as string,
+      type: row.type,
+      executedAt: new Date(row.executedAt),
+      unitPrice: row.unitPrice,
+      quantity: row.quantity,
+      amountInvested: row.amountInvested,
+      fees: row.fees,
+    })),
+  );
+  if (count === null) return { error: "Wallet introuvable." };
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/assets");
+  revalidatePath("/wallets/[id]", "page");
+  return {
+    imported: count,
+    assetsCount: tokens.length,
+    resolvedCount: resolvedByToken.size,
+    submittedAt: Date.now(),
+  };
+}
+
+// Imports a Binance "Transaction History" CSV. The parser pairs the
+// per-leg rows back into buys and sells; only crypto traded against a
+// fiat or stablecoin quote is priceable, so every imported row is crypto.
+// Each token is routed to the wallet chosen for it, created with the
+// quote currency seen in its trades (EUR, or USD for stablecoin pairs).
+export async function importBinanceAction(
+  _prev: BulkImportState,
+  formData: FormData,
+): Promise<BulkImportState> {
+  const user = await requireUser();
+  const text = String(formData.get("data") ?? "");
+
+  const { rows } = parseBinanceCsv(text);
+  if (rows.length === 0) {
+    return {
+      error: "Aucune transaction valide trouvée dans le fichier.",
+    };
+  }
+
+  // Group rows by token so each asset is resolved and created once.
+  const rowsByToken = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = rowsByToken.get(row.token);
+    if (list) list.push(row);
+    else rowsByToken.set(row.token, [row]);
+  }
+  const tokens = [...rowsByToken.keys()];
+
+  // One destination wallet per token, assigned in the review step.
+  const walletByToken = new Map<string, string>();
+  for (const token of tokens) {
+    const walletId = String(formData.get(`wallet_${token}`) ?? "");
+    if (!walletId) {
+      return { error: `Sélectionnez un wallet pour ${token}.` };
+    }
+    walletByToken.set(token, walletId);
+  }
+
+  const resolutions = await Promise.allSettled(
+    tokens.map((token) => resolveCoingeckoId(token)),
+  );
+  const resolvedByToken = new Map<string, { id: string; name: string }>();
+  tokens.forEach((token, index) => {
+    const result = resolutions[index];
+    if (result.status === "fulfilled" && result.value) {
+      resolvedByToken.set(token, result.value);
+    }
+  });
+
+  const assetIdByToken = new Map<string, string>();
+  for (const token of tokens) {
+    const resolved = resolvedByToken.get(token);
+    // A token's amounts are all in one quote currency in practice; use
+    // the most frequent one as the asset's reference currency.
+    const counts = new Map<string, number>();
+    for (const row of rowsByToken.get(token)!) {
+      counts.set(row.currency, (counts.get(row.currency) ?? 0) + 1);
+    }
+    const currency = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const asset = await upsertAsset(user.id, {
+      symbol: token,
+      name: resolved?.name ?? token,
+      type: "CRYPTO",
+      quoteCurrency: currency,
       coingeckoId: resolved?.id ?? null,
       yahooSymbol: null,
     });

@@ -7,6 +7,7 @@ import { ui } from "@/lib/ui";
 import { MultiImport } from "@/components/multi-import";
 import { CmcImport } from "@/components/cmc-import";
 import { BitstackImport } from "@/components/bitstack-import";
+import { BinanceImport } from "@/components/binance-import";
 import { TrImport } from "@/components/tr-import";
 import { TransactionImport } from "@/components/transaction-import";
 import { RealizedGainImport } from "@/components/realized-gain-import";
@@ -116,6 +117,19 @@ export default async function TransactionImportPage() {
               une vente. Les retraits crypto et dépôts en euros sont ignorés.
             </p>
             <BitstackImport wallets={walletOptions} />
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Raccourci Binance
+            </h2>
+            <p className={ui.subtle}>
+              Pré-configuré pour l&apos;export Binance « Historique des
+              transactions ». Les lignes par opération sont recomposées en
+              achats/ventes. Binance n&apos;exportant pas les prix, seuls les
+              échanges contre euro ou stablecoin sont importés.
+            </p>
+            <BinanceImport wallets={walletOptions} />
           </section>
 
           <section className="flex flex-col gap-3">
