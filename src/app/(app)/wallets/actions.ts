@@ -7,7 +7,12 @@ import { requireUser } from "@/lib/auth-server";
 import { WALLET_TYPES, SUPPORTED_CURRENCIES } from "@/lib/constants";
 import { createWallet, updateWallet, deleteWallet } from "@/lib/wallets";
 
-export type WalletFormState = { error?: string; ok?: boolean };
+export type WalletFormState = {
+  error?: string;
+  ok?: boolean;
+  // Changes on every successful create — used to remount and reset the form.
+  submittedAt?: number;
+};
 
 const walletSchema = z.object({
   name: z.string().trim().min(1, "Le nom est requis").max(60),
@@ -34,7 +39,7 @@ export async function createWalletAction(
   }
   await createWallet(user.id, parsed.data);
   revalidatePath("/wallets");
-  return { ok: true };
+  return { ok: true, submittedAt: Date.now() };
 }
 
 export async function updateWalletAction(

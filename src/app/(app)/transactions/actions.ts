@@ -1,0 +1,166 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { requireUser } from "@/lib/auth-server";
+import { ASSET_TYPES, SUPPORTED_CURRENCIES } from "@/lib/constants";
+import { upsertAsset } from "@/lib/assets";
+import {
+  createTransaction,
+  updateTransaction,
+  deleteTransaction,
+} from "@/lib/transactions";
+
+export type TransactionFormState = {
+  error?: string;
+  ok?: boolean;
+  // Changes on every successful create — used to remount and reset the form.
+  submittedAt?: number;
+};
+
+const txSchema = z.object({
+  walletId: z.string().min(1, "Sélectionnez un wallet"),
+  executedAt: z.coerce.date(),
+  unitPrice: z.coerce.number().positive("Le prix d'achat doit être positif"),
+  quantity: z.coerce.number().positive("La quantité doit être positive"),
+  amountInvested: z.coerce
+    .number()
+    .nonnegative("Le montant investi est invalide"),
+  fees: z.coerce.number().nonnegative("Les frais sont invalides"),
+  notes: z.string().trim().max(280),
+});
+
+const newAssetSchema = z.object({
+  name: z.string().trim().min(1, "Nom de l'asset requis").max(80),
+  symbol: z.string().trim().min(1, "Symbole de l'asset requis").max(20),
+  type: z.enum(ASSET_TYPES),
+  quoteCurrency: z.enum(SUPPORTED_CURRENCIES),
+  externalId: z.string().trim().max(120),
+});
+
+function parseTransaction(formData: FormData) {
+  return txSchema.safeParse({
+    walletId: formData.get("walletId"),
+    executedAt: formData.get("executedAt"),
+    unitPrice: formData.get("unitPrice"),
+    quantity: formData.get("quantity"),
+    amountInvested: formData.get("amountInvested"),
+    fees: formData.get("fees"),
+    notes: formData.get("notes") ?? "",
+  });
+}
+
+// The transaction form can either reference an existing asset or define a
+// brand new one inline. This resolves both cases to a single asset id.
+async function resolveAssetId(
+  userId: string,
+  formData: FormData,
+): Promise<{ assetId: string } | { error: string }> {
+  if (formData.get("assetMode") === "new") {
+    const parsed = newAssetSchema.safeParse({
+      name: formData.get("assetName"),
+      symbol: formData.get("assetSymbol"),
+      type: formData.get("assetType"),
+      quoteCurrency: formData.get("assetQuoteCurrency"),
+      externalId: formData.get("assetExternalId") ?? "",
+    });
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Asset invalide" };
+    }
+    const externalId = parsed.data.externalId.trim() || null;
+    const asset = await upsertAsset(userId, {
+      name: parsed.data.name,
+      symbol: parsed.data.symbol.toUpperCase(),
+      type: parsed.data.type,
+      quoteCurrency: parsed.data.quoteCurrency,
+      coingeckoId: parsed.data.type === "CRYPTO" ? externalId : null,
+      yahooSymbol: parsed.data.type === "CRYPTO" ? null : externalId,
+    });
+    return { assetId: asset.id };
+  }
+
+  const assetId = String(formData.get("assetId") ?? "");
+  if (!assetId) return { error: "Sélectionnez un asset" };
+  return { assetId };
+}
+
+export async function createTransactionAction(
+  _prev: TransactionFormState,
+  formData: FormData,
+): Promise<TransactionFormState> {
+  const user = await requireUser();
+  const parsed = parseTransaction(formData);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  }
+
+  const assetResult = await resolveAssetId(user.id, formData);
+  if ("error" in assetResult) return { error: assetResult.error };
+
+  const tx = await createTransaction(user.id, {
+    walletId: parsed.data.walletId,
+    assetId: assetResult.assetId,
+    type: "BUY",
+    executedAt: parsed.data.executedAt,
+    unitPrice: parsed.data.unitPrice,
+    quantity: parsed.data.quantity,
+    amountInvested: parsed.data.amountInvested,
+    fees: parsed.data.fees,
+    notes: parsed.data.notes.trim() || null,
+  });
+  if (!tx) return { error: "Wallet ou asset introuvable" };
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath(`/wallets/${parsed.data.walletId}`);
+  return { ok: true, submittedAt: Date.now() };
+}
+
+export async function updateTransactionAction(
+  _prev: TransactionFormState,
+  formData: FormData,
+): Promise<TransactionFormState> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { error: "Transaction introuvable" };
+
+  const parsed = parseTransaction(formData);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  }
+
+  const assetResult = await resolveAssetId(user.id, formData);
+  if ("error" in assetResult) return { error: assetResult.error };
+
+  const tx = await updateTransaction(id, user.id, {
+    walletId: parsed.data.walletId,
+    assetId: assetResult.assetId,
+    type: "BUY",
+    executedAt: parsed.data.executedAt,
+    unitPrice: parsed.data.unitPrice,
+    quantity: parsed.data.quantity,
+    amountInvested: parsed.data.amountInvested,
+    fees: parsed.data.fees,
+    notes: parsed.data.notes.trim() || null,
+  });
+  if (!tx) return { error: "Transaction, wallet ou asset introuvable" };
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath(`/wallets/${parsed.data.walletId}`);
+  redirect("/transactions");
+}
+
+export async function deleteTransactionAction(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  if (id) {
+    await deleteTransaction(id, user.id);
+  }
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  redirect("/transactions");
+}

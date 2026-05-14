@@ -23,6 +23,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   wallets   Wallet[]
+  assets    Asset[]
   snapshots PortfolioSnapshot[]
 }
 
@@ -44,6 +45,8 @@ model Wallet {
 
 model Asset {
   id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   symbol        String // internal ticker / identifier
   name          String
   type          String // STOCK | ETF | CRYPTO
@@ -57,7 +60,8 @@ model Asset {
   transactions Transaction[]
   price        PriceCache?
 
-  @@unique([symbol, type])
+  @@unique([userId, symbol, type])
+  @@index([userId])
 }
 
 model Transaction {

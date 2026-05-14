@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 import {
   createWalletAction,
   type WalletFormState,
@@ -20,15 +20,11 @@ export function WalletCreateForm() {
     createWalletAction,
     initialState,
   );
-  const formRef = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    if (state.ok) formRef.current?.reset();
-  }, [state]);
 
   return (
+    // Remount the form after each successful create so the fields reset.
     <form
-      ref={formRef}
+      key={state.submittedAt ?? "initial"}
       action={formAction}
       className={`${ui.card} flex flex-col gap-4 sm:flex-row sm:items-end`}
     >
