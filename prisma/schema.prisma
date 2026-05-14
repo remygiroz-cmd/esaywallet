@@ -25,9 +25,24 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  wallets   Wallet[]
-  assets    Asset[]
-  snapshots PortfolioSnapshot[]
+  wallets        Wallet[]
+  assets         Asset[]
+  snapshots      PortfolioSnapshot[]
+  taxAdjustments TaxAdjustment[]
+}
+
+// User-entered figures the app can't derive — currently the
+// carry-forward capital losses from previous years, per tax year.
+model TaxAdjustment {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year             Int
+  carryForwardLoss Decimal  @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, year])
 }
 
 model Wallet {
@@ -37,6 +52,9 @@ model Wallet {
   name      String
   type      String // CTO | PEA | CRYPTO | LIVRET | OTHER
   currency  String   @default("EUR") // reference currency of the wallet
+  // Optional tax-rate override (ratio, e.g. 0.30). Falls back to the
+  // type-based default when null.
+  taxRate   Float?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

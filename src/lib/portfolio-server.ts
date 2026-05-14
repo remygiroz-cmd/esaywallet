@@ -25,6 +25,7 @@ export async function loadPortfolioInput(
       name: wallet.name,
       type: wallet.type,
       currency: wallet.currency,
+      taxRate: wallet.taxRate,
     })),
     assets: assets.map((asset) => ({
       id: asset.id,

@@ -21,7 +21,13 @@ import { buildFxRateMap, convertCurrency } from "@/lib/currency";
 import { DEFAULT_CURRENCY, taxRateForWalletType } from "@/lib/constants";
 
 export type PortfolioInput = {
-  wallets: { id: string; name: string; type: string; currency: string }[];
+  wallets: {
+    id: string;
+    name: string;
+    type: string;
+    currency: string;
+    taxRate?: number | null;
+  }[];
   assets: {
     id: string;
     name: string;
@@ -75,6 +81,9 @@ export type LotComputation = {
 // One SELL transaction, realised against the weighted-average cost.
 export type SaleComputation = {
   transactionId: string;
+  assetId: string;
+  assetName: string;
+  assetSymbol: string;
   walletId: string;
   walletName: string;
   walletCurrency: string;
@@ -136,6 +145,7 @@ export type WalletComputation = {
   gain: number; // wallet currency, unrealised
   gainPct: number;
   realizedGain: number; // wallet currency
+  taxRate: number; // ratio applied to realised gains
   estimatedTax: number; // wallet currency, indicative
   hasMissingPrice: boolean;
   assets: WalletAssetLine[];
@@ -304,6 +314,9 @@ function computePosition(
 
       sales.push({
         transactionId: tx.id,
+        assetId: asset.id,
+        assetName: asset.name,
+        assetSymbol: asset.symbol,
         walletId: wallet.id,
         walletName: wallet.name,
         walletCurrency: wallet.currency,
@@ -425,6 +438,8 @@ function aggregateWallets(
     assets.sort((a, b) => b.gainPct - a.gainPct);
 
     const gain = currentValue - totalCost;
+    const taxRate =
+      wallet.taxRate ?? taxRateForWalletType(wallet.type);
     return {
       walletId: wallet.id,
       name: wallet.name,
@@ -435,8 +450,8 @@ function aggregateWallets(
       gain,
       gainPct: ratio(gain, totalCost),
       realizedGain,
-      estimatedTax:
-        Math.max(0, realizedGain) * taxRateForWalletType(wallet.type),
+      taxRate,
+      estimatedTax: Math.max(0, realizedGain) * taxRate,
       hasMissingPrice,
       assets,
       lots,

@@ -18,6 +18,8 @@ const walletSchema = z.object({
   name: z.string().trim().min(1, "Le nom est requis").max(60),
   type: z.enum(WALLET_TYPES),
   currency: z.enum(SUPPORTED_CURRENCIES),
+  // Tax rate entered as a percentage string (e.g. "30"); "" = use default.
+  taxRate: z.string().trim().max(10).optional(),
 });
 
 function parseWallet(formData: FormData) {
@@ -25,7 +27,16 @@ function parseWallet(formData: FormData) {
     name: formData.get("name"),
     type: formData.get("type"),
     currency: formData.get("currency"),
+    taxRate: formData.get("taxRate") ?? "",
   });
+}
+
+// Percentage string -> ratio, or null when left blank / invalid.
+function toTaxRate(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const percent = Number(raw.replace(",", "."));
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return null;
+  return percent / 100;
 }
 
 export async function createWalletAction(
@@ -37,7 +48,12 @@ export async function createWalletAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  await createWallet(user.id, parsed.data);
+  await createWallet(user.id, {
+    name: parsed.data.name,
+    type: parsed.data.type,
+    currency: parsed.data.currency,
+    taxRate: toTaxRate(parsed.data.taxRate),
+  });
   revalidatePath("/wallets");
   return { ok: true, submittedAt: Date.now() };
 }
@@ -53,9 +69,16 @@ export async function updateWalletAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  await updateWallet(id, user.id, parsed.data);
+  await updateWallet(id, user.id, {
+    name: parsed.data.name,
+    type: parsed.data.type,
+    currency: parsed.data.currency,
+    taxRate: toTaxRate(parsed.data.taxRate),
+  });
   revalidatePath("/wallets");
   revalidatePath(`/wallets/${id}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/fiscalite");
   return { ok: true };
 }
 
