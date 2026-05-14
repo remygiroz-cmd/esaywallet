@@ -27,6 +27,7 @@ import { GainBadge } from "./gain-badge";
 import { PortfolioChart } from "./portfolio-chart";
 import { AssetPriceChart } from "./asset-price-chart";
 import { WalletSection } from "./wallet-section";
+import { AllocationSection } from "./allocation-section";
 
 type DashboardResponse = {
   portfolio: PortfolioComputation;
@@ -134,6 +135,12 @@ export function DashboardLive({
           {portfolio.realizedGain !== 0 || portfolio.estimatedTax > 0 ? (
             <RealizedSummary portfolio={portfolio} />
           ) : null}
+
+          <AllocationSection
+            wallets={portfolio.wallets}
+            assets={portfolio.assets}
+            referenceCurrency={portfolio.referenceCurrency}
+          />
 
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">

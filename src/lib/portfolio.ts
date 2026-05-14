@@ -142,6 +142,7 @@ export type WalletComputation = {
   currency: string;
   totalCost: number; // wallet currency, open position
   currentValue: number; // wallet currency
+  currentValueReference: number; // reference currency
   gain: number; // wallet currency, unrealised
   gainPct: number;
   realizedGain: number; // wallet currency
@@ -221,7 +222,7 @@ export function computePortfolio(
     );
   }
 
-  const wallets = aggregateWallets(input.wallets, positions);
+  const wallets = aggregateWallets(input.wallets, positions, toReference);
   const assets = aggregateAssets(
     input.assets,
     positions,
@@ -392,6 +393,7 @@ function computePosition(
 function aggregateWallets(
   wallets: PortfolioInput["wallets"],
   positions: PositionComputation[],
+  toReference: (amount: number, from: string) => number,
 ): WalletComputation[] {
   return wallets.map((wallet) => {
     const walletPositions = positions.filter(
@@ -447,6 +449,7 @@ function aggregateWallets(
       currency: wallet.currency,
       totalCost,
       currentValue,
+      currentValueReference: toReference(currentValue, wallet.currency),
       gain,
       gainPct: ratio(gain, totalCost),
       realizedGain,
