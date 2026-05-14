@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/alertes", label: "Alertes" },
   { href: "/fiscalite", label: "Fiscalité" },
   { href: "/verifications", label: "Vérifications" },
+  { href: "/documents", label: "Documents" },
 ];
 
 export function AppNav() {

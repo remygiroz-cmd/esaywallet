@@ -31,6 +31,27 @@ model User {
   taxAdjustments     TaxAdjustment[]
   priceAlerts        PriceAlert[]
   realizedGainEntries RealizedGainEntry[]
+  documents          Document[]
+}
+
+// A stored file in the document vault — bank statements, broker exports,
+// tax forms… kept with the user's data rather than as a public URL. The
+// raw bytes live in the database (covered by the database's encryption
+// at rest) and are only ever served back through an authenticated route.
+model Document {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String // original file name
+  mimeType  String
+  size      Int // bytes
+  category  String // RELEVE | TRANSACTIONS | DIVIDENDES | IMPOT | AUTRE
+  year      Int? // optional tax year
+  note      String?
+  content   Bytes // the file itself
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // User-entered figures the app can't derive — currently the

@@ -49,6 +49,23 @@ export const INCOME_KIND_LABELS: Record<IncomeKind, string> = {
   INTEREST: "Intérêts",
 };
 
+export const DOCUMENT_CATEGORIES = [
+  "RELEVE",
+  "TRANSACTIONS",
+  "DIVIDENDES",
+  "IMPOT",
+  "AUTRE",
+] as const;
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  RELEVE: "Relevé bancaire",
+  TRANSACTIONS: "Historique de transactions",
+  DIVIDENDES: "Relevé de dividendes",
+  IMPOT: "Document fiscal",
+  AUTRE: "Autre",
+};
+
 export const CASH_MOVEMENT_KINDS = ["DEPOSIT", "WITHDRAWAL"] as const;
 export type CashMovementKind = (typeof CASH_MOVEMENT_KINDS)[number];
 
