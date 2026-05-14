@@ -160,6 +160,9 @@ model Transaction {
   quantity       Decimal // number of units received/sold
   amountInvested Decimal // total amount invested, in the wallet currency
   fees           Decimal  @default(0)
+  // A SELL that is not a taxable disposal — e.g. a crypto-to-crypto swap,
+  // or a transfer. Excluded from the taxable base in the Fiscalité view.
+  taxExempt      Boolean  @default(false)
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

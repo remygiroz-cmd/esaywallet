@@ -11,6 +11,7 @@ export type TransactionInput = {
   quantity: number;
   amountInvested: number;
   fees: number;
+  taxExempt: boolean;
   notes: string | null;
 };
 
@@ -138,6 +139,7 @@ export type BulkTransactionRow = {
   quantity: number;
   amountInvested: number;
   fees: number;
+  taxExempt?: boolean;
 };
 
 // Inserts many transactions at once into a single wallet/asset pair.
@@ -191,6 +193,7 @@ export async function createBulkTransactions(
       quantity: row.quantity,
       amountInvested: row.amountInvested,
       fees: row.fees,
+      taxExempt: row.taxExempt ?? false,
     })),
   });
   return result.count;

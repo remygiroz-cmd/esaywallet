@@ -48,6 +48,7 @@ export async function loadPortfolioInput(
       quantity: tx.quantity.toNumber(),
       amountInvested: tx.amountInvested.toNumber(),
       fees: tx.fees.toNumber(),
+      taxExempt: tx.taxExempt,
     })),
     prices: prices.map((price) => ({
       assetId: price.assetId,

@@ -113,6 +113,7 @@ export async function GET(request: NextRequest) {
       unitPrice: tx.unitPrice.toNumber(),
       amountInvested: tx.amountInvested.toNumber(),
       fees: tx.fees.toNumber(),
+      taxExempt: tx.taxExempt,
       notes: tx.notes,
     })),
     taxAdjustments: taxAdjustments.map((adjustment) => ({

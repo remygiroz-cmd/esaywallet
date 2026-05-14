@@ -5,7 +5,11 @@ import {
   saveTaxAdjustmentAction,
   type TaxAdjustmentState,
 } from "@/app/(app)/fiscalite/actions";
-import type { FiscalSale, FiscalIncome } from "@/lib/fiscalite";
+import type {
+  FiscalSale,
+  FiscalIncome,
+  FiscalWithdrawal,
+} from "@/lib/fiscalite";
 import { INCOME_KIND_LABELS, type IncomeKind } from "@/lib/constants";
 import {
   formatCurrency,
@@ -20,6 +24,7 @@ import { GainBadge } from "./gain-badge";
 type Props = {
   sales: FiscalSale[];
   income: FiscalIncome[];
+  withdrawals: FiscalWithdrawal[];
   adjustments: { year: number; carryForwardLoss: number }[];
 };
 
@@ -29,7 +34,12 @@ function csvField(value: string | number): string {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
-export function FiscaliteView({ sales, income, adjustments }: Props) {
+export function FiscaliteView({
+  sales,
+  income,
+  withdrawals,
+  adjustments,
+}: Props) {
   const availableYears = useMemo(
     () =>
       [
@@ -38,9 +48,10 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
           ...income.map((entry) =>
             new Date(entry.receivedAt).getFullYear(),
           ),
+          ...withdrawals.map((w) => new Date(w.occurredAt).getFullYear()),
         ]),
       ].sort((a, b) => b - a),
-    [sales, income],
+    [sales, income, withdrawals],
   );
 
   const currentYear = new Date().getFullYear();
@@ -82,6 +93,20 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
     });
   }, [income, mode, year, from, to]);
 
+  const filteredWithdrawals = useMemo(() => {
+    if (mode === "year") {
+      return withdrawals.filter(
+        (w) => new Date(w.occurredAt).getFullYear() === year,
+      );
+    }
+    const fromTime = from ? new Date(from).getTime() : -Infinity;
+    const toTime = to ? new Date(`${to}T23:59:59`).getTime() : Infinity;
+    return withdrawals.filter((w) => {
+      const time = new Date(w.occurredAt).getTime();
+      return time >= fromTime && time <= toTime;
+    });
+  }, [withdrawals, mode, year, from, to]);
+
   const carryForward =
     mode === "year"
       ? (adjustments.find((a) => a.year === year)?.carryForwardLoss ?? 0)
@@ -105,6 +130,8 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
       { name: string; symbol: string; realizedGain: number; count: number }
     >();
     let netRealized = 0;
+    let taxableRealized = 0;
+    let nonTaxableCount = 0;
     let totalIncome = 0;
 
     const getWallet = (id: string, name: string) => {
@@ -125,12 +152,17 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
 
     for (const sale of filtered) {
       netRealized += sale.realizedGain;
+      if (!sale.taxable) nonTaxableCount += 1;
       const wallet = getWallet(sale.walletId, sale.walletName);
       wallet.realizedGain += sale.realizedGain;
       wallet.count += 1;
-      // Each sale is taxed at its own rate (PEA 5-year rule).
-      wallet.estimatedTax += Math.max(0, sale.realizedGain) * sale.taxRate;
-      wallet.rates.add(sale.taxRate);
+      // Only taxable sales feed the taxable base and the estimated tax.
+      // Each is taxed at its own rate (PEA 5-year rule).
+      if (sale.taxable) {
+        taxableRealized += sale.realizedGain;
+        wallet.estimatedTax += Math.max(0, sale.realizedGain) * sale.taxRate;
+        wallet.rates.add(sale.taxRate);
+      }
 
       const asset = perAsset.get(sale.assetId) ?? {
         name: sale.assetName,
@@ -148,8 +180,10 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
       const wallet = getWallet(entry.walletId, entry.walletName);
       wallet.income += entry.net;
       wallet.incomeCount += 1;
-      wallet.estimatedTax += Math.max(0, entry.net) * entry.taxRate;
-      wallet.rates.add(entry.taxRate);
+      if (entry.taxable) {
+        wallet.estimatedTax += Math.max(0, entry.net) * entry.taxRate;
+        wallet.rates.add(entry.taxRate);
+      }
     }
 
     const wallets = [...perWallet.values()].sort(
@@ -161,14 +195,15 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
     );
 
     // Carry-forward losses reduce taxable gains, distributed proportionally
-    // across each positive-gain sale (taxed at its own rate). Income is taxed
-    // separately at its own rate, without carry-forward.
-    const totalPositiveGain = filtered.reduce(
+    // across each taxable positive-gain sale (taxed at its own rate). Income
+    // is taxed separately at its own rate, without carry-forward.
+    const taxableSales = filtered.filter((sale) => sale.taxable);
+    const totalPositiveGain = taxableSales.reduce(
       (sum, sale) => sum + Math.max(0, sale.realizedGain),
       0,
     );
     let estimatedTax = 0;
-    for (const sale of filtered) {
+    for (const sale of taxableSales) {
       const positive = Math.max(0, sale.realizedGain);
       const share =
         totalPositiveGain > 0
@@ -177,15 +212,19 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
       estimatedTax += Math.max(0, sale.realizedGain - share) * sale.taxRate;
     }
     for (const entry of filteredIncome) {
-      estimatedTax += Math.max(0, entry.net) * entry.taxRate;
+      if (entry.taxable) {
+        estimatedTax += Math.max(0, entry.net) * entry.taxRate;
+      }
     }
 
     return {
       wallets,
       assets,
       netRealized,
+      taxableRealized,
+      nonTaxableCount,
       totalIncome,
-      netTaxable: Math.max(0, netRealized - carryForward),
+      netTaxable: Math.max(0, taxableRealized - carryForward),
       estimatedTax,
     };
   }, [filtered, filteredIncome, carryForward]);
@@ -200,6 +239,7 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
       "Montant reçu (EUR)",
       "Coût PMP (EUR)",
       "Plus-value réalisée (EUR)",
+      "Imposable",
     ]
       .map(csvField)
       .join(",");
@@ -213,6 +253,11 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
         sale.proceeds.toFixed(2),
         sale.costOfSold.toFixed(2),
         sale.realizedGain.toFixed(2),
+        sale.taxable
+          ? "oui"
+          : sale.walletType === "PEA"
+            ? "non (PEA, au retrait)"
+            : "non",
       ]
         .map(csvField)
         .join(","),
@@ -303,7 +348,13 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               Plus / moins-value réalisée ({filtered.length} vente
-              {filtered.length === 1 ? "" : "s"})
+              {filtered.length === 1 ? "" : "s"}
+              {summary.nonTaxableCount > 0
+                ? `, dont ${summary.nonTaxableCount} non imposable${
+                    summary.nonTaxableCount === 1 ? "" : "s"
+                  }`
+                : ""}
+              )
             </p>
           </div>
           <div>
@@ -342,10 +393,12 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
         ) : null}
 
         <p className="mt-4 text-xs text-zinc-400">
-          Estimation indicative. La fiscalité réelle dépend de règles que
-          l&apos;application ne connaît pas (durée de détention, abattements,
-          régime du PEA…). Ajustez le taux d&apos;imposition sur chaque wallet
-          et les moins-values reportables ci-dessus.
+          Estimation indicative. Ne sont pas comptées dans la base imposable :
+          les ventes internes d&apos;un PEA (imposées au retrait — voir
+          ci-dessous), les conversions crypto↔crypto et les transferts marqués
+          « non imposables ». La fiscalité réelle dépend aussi de règles que
+          l&apos;application ne connaît pas (durée de détention, abattements…).
+          Ajustez le taux sur chaque wallet et les moins-values reportables.
         </p>
       </div>
 
@@ -386,9 +439,11 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
                       {wallet.count}
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
-                      {wallet.rates.size === 1
-                        ? formatPercent([...wallet.rates][0])
-                        : "variable"}
+                      {wallet.rates.size === 0
+                        ? "—"
+                        : wallet.rates.size === 1
+                          ? formatPercent([...wallet.rates][0])
+                          : "variable"}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <GainBadge
@@ -469,6 +524,13 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
                     </td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
                       {sale.walletName}
+                      {!sale.taxable ? (
+                        <span className="mt-0.5 block text-xs text-amber-600 dark:text-amber-400">
+                          {sale.walletType === "PEA"
+                            ? "PEA · imposé au retrait"
+                            : "non imposable"}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
                       {formatQuantity(sale.quantity)}
@@ -550,6 +612,76 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
           </div>
         )}
       </section>
+
+      {/* PEA withdrawals — the taxable event for a PEA */}
+      {withdrawals.length > 0 ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Retraits PEA
+          </h2>
+          {filteredWithdrawals.length === 0 ? (
+            <p className={ui.subtle}>Aucun retrait sur cette période.</p>
+          ) : (
+            <>
+              <div className={`${ui.card} overflow-x-auto p-0`}>
+                <table className="w-full min-w-[34rem] text-sm">
+                  <thead>
+                    <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
+                      <th className="px-4 py-3 font-medium">Date</th>
+                      <th className="px-4 py-3 font-medium">Wallet</th>
+                      <th className="px-4 py-3 font-medium">Statut fiscal</th>
+                      <th className="px-4 py-3 text-right font-medium">
+                        Montant
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredWithdrawals.map((w) => (
+                      <tr
+                        key={w.id}
+                        className="border-b border-black/[.05] last:border-0 dark:border-white/[.06]"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                          {formatDate(w.occurredAt)}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
+                          {w.walletName}
+                        </td>
+                        <td className="px-4 py-3">
+                          {w.beforeMaturity ? (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              Avant 5 ans — potentiellement imposable
+                            </span>
+                          ) : w.openedAt ? (
+                            <span className="text-emerald-600 dark:text-emerald-400">
+                              Après 5 ans — exonéré
+                            </span>
+                          ) : (
+                            <span className="text-zinc-500 dark:text-zinc-400">
+                              Date d&apos;ouverture du PEA inconnue
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium tabular-nums text-zinc-700 dark:text-zinc-200">
+                          {formatCurrency(w.amount, "EUR")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-zinc-400">
+                Pour un PEA, l&apos;événement imposable est le retrait, pas la
+                vente interne. Un retrait avant 5 ans rend la part de gain
+                imposable et clôture le plan ; le montant exact dépend du
+                ratio de plus-value au moment du retrait — à calculer et
+                déclarer manuellement. Renseignez la date d&apos;ouverture du
+                PEA dans ses paramètres pour fiabiliser ce statut.
+              </p>
+            </>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
