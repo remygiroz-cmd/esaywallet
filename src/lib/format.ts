@@ -30,7 +30,7 @@ export function formatSignedCurrency(value: number, currency: string): string {
   }).format(value);
 }
 
-export function formatDate(date: Date | string): string {
+export function formatDate(date: Date | string | number): string {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
     new Date(date),
   );

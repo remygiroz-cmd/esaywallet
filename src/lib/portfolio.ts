@@ -96,6 +96,12 @@ export type WalletComputation = {
   lots: LotComputation[];
 };
 
+export type PortfolioSnapshotPoint = {
+  date: string;
+  totalValue: number;
+  totalInvested: number;
+};
+
 export type PortfolioComputation = {
   referenceCurrency: string;
   totalCost: number;

@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth-server";
 import { refreshPrices } from "@/lib/prices/service";
 import { loadPortfolio } from "@/lib/portfolio-server";
+import { recordGlobalSnapshot, getGlobalSnapshots } from "@/lib/snapshots";
 
 export const dynamic = "force-dynamic";
 
-// Polled by the dashboard every minute: refreshes live prices, then returns
-// the freshly computed portfolio at all four levels.
+// Polled by the dashboard every minute: refreshes live prices, recomputes
+// the portfolio at all four levels, updates today's history snapshot and
+// returns everything the dashboard needs.
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
@@ -16,5 +18,13 @@ export async function GET() {
   const refresh = await refreshPrices(user.id);
   const portfolio = await loadPortfolio(user.id);
 
-  return NextResponse.json({ portfolio, refresh });
+  await recordGlobalSnapshot(
+    user.id,
+    portfolio.currentValue,
+    portfolio.totalCost,
+    portfolio.referenceCurrency,
+  );
+  const history = await getGlobalSnapshots(user.id);
+
+  return NextResponse.json({ portfolio, history, refresh });
 }

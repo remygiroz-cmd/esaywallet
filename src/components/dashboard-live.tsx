@@ -7,6 +7,7 @@ import type {
   PortfolioComputation,
   WalletComputation,
   AssetComputation,
+  PortfolioSnapshotPoint,
 } from "@/lib/portfolio";
 import {
   WALLET_TYPE_LABELS,
@@ -22,9 +23,11 @@ import {
 } from "@/lib/format";
 import { ui } from "@/lib/ui";
 import { GainBadge } from "./gain-badge";
+import { PortfolioChart } from "./portfolio-chart";
 
 type DashboardResponse = {
   portfolio: PortfolioComputation;
+  history: PortfolioSnapshotPoint[];
   refresh: { refreshedAt: string; updated: number; errors: string[] };
 };
 
@@ -38,8 +41,10 @@ async function fetchDashboard(): Promise<DashboardResponse> {
 
 export function DashboardLive({
   initialPortfolio,
+  initialHistory,
 }: {
   initialPortfolio: PortfolioComputation;
+  initialHistory: PortfolioSnapshotPoint[];
 }) {
   const { data, isFetching, isPlaceholderData, refetch } =
     useQuery<DashboardResponse>({
@@ -48,6 +53,7 @@ export function DashboardLive({
       refetchInterval: 60_000,
       placeholderData: {
         portfolio: initialPortfolio,
+        history: initialHistory,
         refresh: {
           refreshedAt: initialPortfolio.generatedAt,
           updated: 0,
@@ -57,7 +63,7 @@ export function DashboardLive({
     });
 
   // `data` is always defined here thanks to placeholderData.
-  const { portfolio, refresh } = data as DashboardResponse;
+  const { portfolio, history, refresh } = data as DashboardResponse;
   const hasTransactions = portfolio.assets.length > 0;
 
   return (
@@ -115,6 +121,16 @@ export function DashboardLive({
           ) : null}
 
           <GlobalSummary portfolio={portfolio} />
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Évolution
+            </h2>
+            <PortfolioChart
+              history={history}
+              currency={portfolio.referenceCurrency}
+            />
+          </section>
 
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
