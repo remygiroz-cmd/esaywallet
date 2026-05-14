@@ -371,11 +371,11 @@ function AssetRow({
 
       {expanded ? (
         <div className="flex flex-col gap-4 border-t border-black/[.06] px-5 py-3 dark:border-white/[.08]">
-          <div>
+          <div className="overflow-x-auto">
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
               Achats
             </p>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[34rem] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-zinc-400">
                   <th className="py-2 font-medium">Date</th>
@@ -448,11 +448,11 @@ function AssetRow({
 
 function SalesTable({ sales }: { sales: SaleComputation[] }) {
   return (
-    <div>
+    <div className="overflow-x-auto">
       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
         Ventes
       </p>
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[34rem] text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-zinc-400">
             <th className="py-2 font-medium">Date</th>

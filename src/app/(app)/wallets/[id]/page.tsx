@@ -34,7 +34,7 @@ export default async function WalletDetailPage({
         >
           ← Tous les wallets
         </Link>
-        <div className="mt-2 flex items-start justify-between gap-4">
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className={ui.heading}>{wallet.name}</h1>
             <p className={`mt-1 ${ui.subtle}`}>
@@ -77,7 +77,7 @@ export default async function WalletDetailPage({
           </div>
         ) : (
           <div className={`${ui.card} overflow-x-auto p-0`}>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[40rem] text-sm">
               <thead>
                 <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
                   <th className="px-4 py-3 font-medium">Date</th>
