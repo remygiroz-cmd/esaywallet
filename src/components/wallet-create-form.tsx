@@ -1,0 +1,82 @@
+"use client";
+
+import { useActionState, useEffect, useRef } from "react";
+import {
+  createWalletAction,
+  type WalletFormState,
+} from "@/app/(app)/wallets/actions";
+import {
+  WALLET_TYPES,
+  WALLET_TYPE_LABELS,
+  SUPPORTED_CURRENCIES,
+  DEFAULT_CURRENCY,
+} from "@/lib/constants";
+import { ui } from "@/lib/ui";
+
+const initialState: WalletFormState = {};
+
+export function WalletCreateForm() {
+  const [state, formAction, pending] = useActionState(
+    createWalletAction,
+    initialState,
+  );
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (state.ok) formRef.current?.reset();
+  }, [state]);
+
+  return (
+    <form
+      ref={formRef}
+      action={formAction}
+      className={`${ui.card} flex flex-col gap-4 sm:flex-row sm:items-end`}
+    >
+      <label className={`${ui.label} flex-1`}>
+        Nom du wallet
+        <input
+          name="name"
+          type="text"
+          required
+          maxLength={60}
+          placeholder="Ex. PEA Bourse Direct"
+          className={ui.input}
+        />
+      </label>
+
+      <label className={`${ui.label} sm:w-48`}>
+        Type
+        <select name="type" defaultValue="CTO" className={ui.input}>
+          {WALLET_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {WALLET_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className={`${ui.label} sm:w-28`}>
+        Devise
+        <select
+          name="currency"
+          defaultValue={DEFAULT_CURRENCY}
+          className={ui.input}
+        >
+          {SUPPORTED_CURRENCIES.map((currency) => (
+            <option key={currency} value={currency}>
+              {currency}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <button type="submit" disabled={pending} className={ui.primaryButton}>
+        {pending ? "Création…" : "Ajouter"}
+      </button>
+
+      {state.error ? (
+        <p className={`${ui.errorText} sm:basis-full`}>{state.error}</p>
+      ) : null}
+    </form>
+  );
+}

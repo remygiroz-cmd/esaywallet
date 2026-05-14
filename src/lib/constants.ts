@@ -10,7 +10,10 @@ export type AssetType = (typeof ASSET_TYPES)[number];
 export const TRANSACTION_TYPES = ["BUY", "SELL"] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
-export const DEFAULT_CURRENCY = "EUR";
+export const SUPPORTED_CURRENCIES = ["EUR", "USD", "GBP", "CHF"] as const;
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
+export const DEFAULT_CURRENCY: SupportedCurrency = "EUR";
 
 export const WALLET_TYPE_LABELS: Record<WalletType, string> = {
   CTO: "Compte-titres ordinaire",
