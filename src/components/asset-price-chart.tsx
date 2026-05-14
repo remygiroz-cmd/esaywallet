@@ -130,11 +130,11 @@ export function AssetPriceChart({ assetId }: { assetId: string }) {
 
       <div className="mt-2 h-56 w-full">
         {points.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-400">
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-400">
             {isFetching
               ? "Chargement du cours…"
-              : isError
-                ? "Cours indisponible."
+              : isError || data?.history === null
+                ? "Cours momentanément indisponible — réessaie dans un instant."
                 : "Aucune donnée pour cette période."}
           </div>
         ) : (
