@@ -39,7 +39,22 @@ export async function upsertAsset(userId: string, data: AssetInput) {
       userId_symbol_type: { userId, symbol: data.symbol, type: data.type },
     },
   });
-  if (existing) return existing;
+  if (existing) {
+    // Backfill a missing price identifier if the new data provides one,
+    // but never overwrite an identifier the user already set.
+    const coingeckoId = existing.coingeckoId ?? data.coingeckoId ?? null;
+    const yahooSymbol = existing.yahooSymbol ?? data.yahooSymbol ?? null;
+    if (
+      coingeckoId !== existing.coingeckoId ||
+      yahooSymbol !== existing.yahooSymbol
+    ) {
+      return prisma.asset.update({
+        where: { id: existing.id },
+        data: { coingeckoId, yahooSymbol },
+      });
+    }
+    return existing;
+  }
   return prisma.asset.create({ data: { ...data, userId } });
 }
 

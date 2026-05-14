@@ -121,3 +121,33 @@ export async function searchAssets(
   ]);
   return [...stocks, ...crypto].slice(0, 12);
 }
+
+// Resolves a crypto symbol (e.g. "BTC") to its CoinGecko id, used when
+// importing a file that only carries ticker symbols. CoinGecko ranks
+// search results by relevance, so the first symbol match is the main coin.
+export async function resolveCoingeckoId(
+  symbol: string,
+): Promise<{ id: string; name: string } | null> {
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (process.env.COINGECKO_API_KEY) {
+    headers["x-cg-demo-api-key"] = process.env.COINGECKO_API_KEY;
+  }
+
+  const res = await fetch(
+    `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(
+      symbol,
+    )}`,
+    { headers, cache: "no-store" },
+  );
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as {
+    coins?: { id: string; name: string; symbol: string }[];
+  };
+  const coins = data.coins ?? [];
+  const exact = coins.find(
+    (coin) => coin.symbol.toUpperCase() === symbol.toUpperCase(),
+  );
+  const chosen = exact ?? coins[0];
+  return chosen ? { id: chosen.id, name: chosen.name } : null;
+}

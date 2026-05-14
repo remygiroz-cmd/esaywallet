@@ -15,9 +15,12 @@ import {
   updateTransaction,
   deleteTransaction,
   createTransactionsBulk,
+  createWalletTransactionsBulk,
   deleteTransactionsBulk,
 } from "@/lib/transactions";
 import { parseTransactionRows } from "@/lib/import";
+import { parseCmcCsv } from "@/lib/import-cmc";
+import { resolveCoingeckoId } from "@/lib/prices/search";
 
 export type TransactionFormState = {
   error?: string;
@@ -257,4 +260,85 @@ export async function importTransactionsAction(
   revalidatePath("/dashboard");
   revalidatePath(`/wallets/${walletId}`);
   return { imported: count, submittedAt: Date.now() };
+}
+
+export type CmcImportState = {
+  error?: string;
+  imported?: number;
+  assetsCount?: number;
+  resolvedCount?: number;
+  submittedAt?: number;
+};
+
+// Imports a CoinMarketCap "transaction history" CSV: one wallet, many
+// assets. Each token symbol is resolved to a CoinGecko id so live prices
+// work straight away.
+export async function importCmcAction(
+  _prev: CmcImportState,
+  formData: FormData,
+): Promise<CmcImportState> {
+  const user = await requireUser();
+  const walletId = String(formData.get("walletId") ?? "");
+  const text = String(formData.get("data") ?? "");
+
+  if (!walletId) return { error: "Sélectionnez un wallet." };
+
+  const { rows } = parseCmcCsv(text);
+  if (rows.length === 0) {
+    return {
+      error: "Aucune transaction valide trouvée dans le fichier.",
+    };
+  }
+
+  const tokens = [...new Set(rows.map((row) => row.token))];
+  const resolutions = await Promise.allSettled(
+    tokens.map((token) => resolveCoingeckoId(token)),
+  );
+  const resolvedByToken = new Map<string, { id: string; name: string }>();
+  tokens.forEach((token, index) => {
+    const result = resolutions[index];
+    if (result.status === "fulfilled" && result.value) {
+      resolvedByToken.set(token, result.value);
+    }
+  });
+
+  const assetIdByToken = new Map<string, string>();
+  for (const token of tokens) {
+    const resolved = resolvedByToken.get(token);
+    const asset = await upsertAsset(user.id, {
+      symbol: token,
+      name: resolved?.name ?? token,
+      type: "CRYPTO",
+      quoteCurrency: "EUR",
+      coingeckoId: resolved?.id ?? null,
+      yahooSymbol: null,
+    });
+    assetIdByToken.set(token, asset.id);
+  }
+
+  const count = await createWalletTransactionsBulk(
+    user.id,
+    walletId,
+    rows.map((row) => ({
+      assetId: assetIdByToken.get(row.token) as string,
+      type: row.type,
+      executedAt: new Date(row.executedAt),
+      unitPrice: row.unitPrice,
+      quantity: row.quantity,
+      amountInvested: row.amountInvested,
+      fees: row.fees,
+    })),
+  );
+  if (count === null) return { error: "Wallet introuvable." };
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/assets");
+  revalidatePath("/wallets/[id]", "page");
+  return {
+    imported: count,
+    assetsCount: tokens.length,
+    resolvedCount: resolvedByToken.size,
+    submittedAt: Date.now(),
+  };
 }
