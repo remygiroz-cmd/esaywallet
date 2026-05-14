@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { getCashByWallet } from "@/lib/cash";
 import {
   computePortfolio,
   type PortfolioInput,
@@ -11,13 +12,15 @@ import {
 export async function loadPortfolioInput(
   userId: string,
 ): Promise<PortfolioInput> {
-  const [wallets, assets, transactions, prices, fxRates] = await Promise.all([
-    prisma.wallet.findMany({ where: { userId } }),
-    prisma.asset.findMany({ where: { userId } }),
-    prisma.transaction.findMany({ where: { wallet: { userId } } }),
-    prisma.priceCache.findMany({ where: { asset: { userId } } }),
-    prisma.fxRate.findMany({ where: { base: "EUR" } }),
-  ]);
+  const [wallets, assets, transactions, prices, fxRates, cashByWallet] =
+    await Promise.all([
+      prisma.wallet.findMany({ where: { userId } }),
+      prisma.asset.findMany({ where: { userId } }),
+      prisma.transaction.findMany({ where: { wallet: { userId } } }),
+      prisma.priceCache.findMany({ where: { asset: { userId } } }),
+      prisma.fxRate.findMany({ where: { base: "EUR" } }),
+      getCashByWallet(userId),
+    ]);
 
   return {
     wallets: wallets.map((wallet) => ({
@@ -56,6 +59,7 @@ export async function loadPortfolioInput(
       quote: rate.quote,
       rate: rate.rate.toNumber(),
     })),
+    cashByWallet: Object.fromEntries(cashByWallet),
   };
 }
 

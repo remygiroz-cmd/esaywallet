@@ -197,6 +197,12 @@ function WalletCard({
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         Investi : {formatCurrency(wallet.totalCost, wallet.currency)}
       </p>
+      {wallet.cashBalance !== 0 ? (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Espèces : {formatCurrency(wallet.cashBalance, wallet.currency)} ·
+          total {formatCurrency(wallet.totalValue, wallet.currency)}
+        </p>
+      ) : null}
       {wallet.realizedGain !== 0 ? (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Réalisé : {formatCurrency(wallet.realizedGain, wallet.currency)}

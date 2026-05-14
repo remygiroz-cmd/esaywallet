@@ -4,8 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth-server";
-import { WALLET_TYPES, SUPPORTED_CURRENCIES } from "@/lib/constants";
+import {
+  WALLET_TYPES,
+  SUPPORTED_CURRENCIES,
+  CASH_MOVEMENT_KINDS,
+} from "@/lib/constants";
 import { createWallet, updateWallet, deleteWallet } from "@/lib/wallets";
+import { createCashMovement, deleteCashMovement } from "@/lib/cash";
 
 export type WalletFormState = {
   error?: string;
@@ -89,5 +94,63 @@ export async function deleteWalletAction(formData: FormData): Promise<void> {
     await deleteWallet(id, user.id);
   }
   revalidatePath("/wallets");
+  redirect("/wallets");
+}
+
+export type CashMovementFormState = {
+  error?: string;
+  ok?: boolean;
+  submittedAt?: number;
+};
+
+const cashMovementSchema = z.object({
+  walletId: z.string().min(1, "Wallet introuvable"),
+  kind: z.enum(CASH_MOVEMENT_KINDS),
+  amount: z.coerce.number().positive("Le montant doit être positif"),
+  occurredAt: z.coerce.date(),
+  note: z.string().trim().max(140),
+});
+
+export async function createCashMovementAction(
+  _prev: CashMovementFormState,
+  formData: FormData,
+): Promise<CashMovementFormState> {
+  const user = await requireUser();
+  const parsed = cashMovementSchema.safeParse({
+    walletId: formData.get("walletId"),
+    kind: formData.get("kind"),
+    amount: formData.get("amount"),
+    occurredAt: formData.get("occurredAt"),
+    note: formData.get("note") ?? "",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  }
+
+  const movement = await createCashMovement(parsed.data.walletId, user.id, {
+    kind: parsed.data.kind,
+    amount: parsed.data.amount,
+    occurredAt: parsed.data.occurredAt,
+    note: parsed.data.note.trim() || null,
+  });
+  if (!movement) return { error: "Wallet introuvable" };
+
+  revalidatePath(`/wallets/${parsed.data.walletId}`);
+  revalidatePath("/dashboard");
+  return { ok: true, submittedAt: Date.now() };
+}
+
+export async function deleteCashMovementAction(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const walletId = String(formData.get("walletId") ?? "");
+  if (id) await deleteCashMovement(id, user.id);
+  revalidatePath("/dashboard");
+  if (walletId) {
+    revalidatePath(`/wallets/${walletId}`);
+    redirect(`/wallets/${walletId}`);
+  }
   redirect("/wallets");
 }

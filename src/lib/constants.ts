@@ -49,6 +49,14 @@ export const INCOME_KIND_LABELS: Record<IncomeKind, string> = {
   INTEREST: "Intérêts",
 };
 
+export const CASH_MOVEMENT_KINDS = ["DEPOSIT", "WITHDRAWAL"] as const;
+export type CashMovementKind = (typeof CASH_MOVEMENT_KINDS)[number];
+
+export const CASH_MOVEMENT_KIND_LABELS: Record<CashMovementKind, string> = {
+  DEPOSIT: "Dépôt",
+  WITHDRAWAL: "Retrait",
+};
+
 export const ALERT_DIRECTIONS = ["ABOVE", "BELOW"] as const;
 export type AlertDirection = (typeof ALERT_DIRECTIONS)[number];
 
