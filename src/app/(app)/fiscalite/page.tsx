@@ -17,14 +17,15 @@ export default async function FiscalitePage() {
         </p>
       </header>
 
-      {data.sales.length === 0 ? (
+      {data.sales.length === 0 && data.income.length === 0 ? (
         <div className="rounded-xl border border-dashed border-black/[.15] bg-white p-8 text-center text-sm text-zinc-500 dark:border-white/[.15] dark:bg-zinc-950 dark:text-zinc-400">
-          Aucune vente enregistrée. Les ventes que vous saisirez
-          apparaîtront ici, regroupées par année.
+          Aucune vente ni revenu enregistré. Les ventes et revenus que vous
+          saisirez apparaîtront ici, regroupés par année.
         </div>
       ) : (
         <FiscaliteView
           sales={data.sales}
+          income={data.income}
           adjustments={data.adjustments}
         />
       )}

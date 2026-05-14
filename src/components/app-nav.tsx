@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/wallets", label: "Wallets" },
   { href: "/assets", label: "Assets" },
   { href: "/transactions", label: "Transactions" },
+  { href: "/revenus", label: "Revenus" },
   { href: "/fiscalite", label: "Fiscalité" },
 ];
 

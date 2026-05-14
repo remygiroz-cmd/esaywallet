@@ -34,6 +34,21 @@ export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
   SELL: "Vente",
 };
 
+export const INCOME_KINDS = [
+  "DIVIDEND",
+  "COUPON",
+  "STAKING",
+  "INTEREST",
+] as const;
+export type IncomeKind = (typeof INCOME_KINDS)[number];
+
+export const INCOME_KIND_LABELS: Record<IncomeKind, string> = {
+  DIVIDEND: "Dividende",
+  COUPON: "Coupon",
+  STAKING: "Récompense de staking",
+  INTEREST: "Intérêts",
+};
+
 // Indicative French tax rates applied to net realised gains, by wallet type:
 //  - CTO / crypto / autre : flat tax (PFU) 30 %
 //  - PEA : income-tax exempt, only social contributions (17,2 %)

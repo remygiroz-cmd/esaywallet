@@ -33,6 +33,7 @@ type DashboardResponse = {
   portfolio: PortfolioComputation;
   history: PortfolioSnapshotPoint[];
   refresh: { refreshedAt: string; updated: number; errors: string[] };
+  income: Record<string, number>;
 };
 
 async function fetchDashboard(): Promise<DashboardResponse> {
@@ -46,9 +47,11 @@ async function fetchDashboard(): Promise<DashboardResponse> {
 export function DashboardLive({
   initialPortfolio,
   initialHistory,
+  initialIncome,
 }: {
   initialPortfolio: PortfolioComputation;
   initialHistory: PortfolioSnapshotPoint[];
+  initialIncome: Record<string, number>;
 }) {
   const { data, isFetching, isPlaceholderData, refetch } =
     useQuery<DashboardResponse>({
@@ -63,11 +66,12 @@ export function DashboardLive({
           updated: 0,
           errors: [],
         },
+        income: initialIncome,
       },
     });
 
   // `data` is always defined here thanks to placeholderData.
-  const { portfolio, history, refresh } = data as DashboardResponse;
+  const { portfolio, history, refresh, income } = data as DashboardResponse;
   const hasTransactions = portfolio.assets.length > 0;
 
   // The "focused" wallet: its card is expanded and the assets list below
@@ -134,6 +138,10 @@ export function DashboardLive({
 
           {portfolio.realizedGain !== 0 || portfolio.estimatedTax > 0 ? (
             <RealizedSummary portfolio={portfolio} />
+          ) : null}
+
+          {Object.keys(income).length > 0 ? (
+            <IncomeSummary income={income} />
           ) : null}
 
           <AllocationSection
@@ -372,6 +380,37 @@ function RealizedSummary({ portfolio }: { portfolio: PortfolioComputation }) {
         fiscalité réelle dépend de votre situation et de la durée de
         détention.
       </p>
+    </div>
+  );
+}
+
+function IncomeSummary({ income }: { income: Record<string, number> }) {
+  const entries = Object.entries(income);
+  return (
+    <div className="rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.12] dark:bg-zinc-950">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+          Revenus perçus
+        </p>
+        <Link
+          href="/revenus"
+          className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+        >
+          Gérer les revenus →
+        </Link>
+      </div>
+      <div className="mt-2 flex flex-wrap items-end gap-x-10 gap-y-4">
+        {entries.map(([currency, total]) => (
+          <div key={currency}>
+            <p className="text-2xl font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">
+              {formatCurrency(total, currency)}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Dividendes, coupons & intérêts ({currency})
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
