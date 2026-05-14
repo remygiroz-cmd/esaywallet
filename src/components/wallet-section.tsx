@@ -12,25 +12,19 @@ type DragPayload = { assetId: string; fromWalletId: string };
 
 export function WalletSection({
   wallets,
+  selectedWalletId,
+  onSelectWallet,
   onMoved,
 }: {
   wallets: WalletComputation[];
+  selectedWalletId: string | null;
+  onSelectWallet: (walletId: string | null) => void;
   onMoved: () => void;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [draggingFrom, setDraggingFrom] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  function toggle(walletId: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(walletId)) next.delete(walletId);
-      else next.add(walletId);
-      return next;
-    });
-  }
 
   async function move(
     assetId: string,
@@ -65,40 +59,46 @@ export function WalletSection({
       </div>
 
       <p className="text-xs text-zinc-400">
-        Déroulez une carte pour voir ses assets. Glissez-déposez un asset sur
-        un autre wallet (ou utilisez le menu « Déplacer ») pour le réassigner.
+        Cliquez sur une carte pour voir ses assets et filtrer la liste
+        ci-dessous. Glissez-déposez un asset sur un autre wallet (ou utilisez
+        le menu « Déplacer ») pour le réassigner.
       </p>
 
       {error ? <p className={ui.errorText}>{error}</p> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {wallets.map((wallet) => (
-          <WalletCard
-            key={wallet.walletId}
-            wallet={wallet}
-            allWallets={wallets}
-            expanded={expanded.has(wallet.walletId)}
-            isDragSource={draggingFrom === wallet.walletId}
-            isDropTarget={
-              dragOver === wallet.walletId &&
-              draggingFrom !== null &&
-              draggingFrom !== wallet.walletId
-            }
-            onToggle={() => toggle(wallet.walletId)}
-            onAssetDragStart={() => setDraggingFrom(wallet.walletId)}
-            onAssetDragEnd={() => {
-              setDraggingFrom(null);
-              setDragOver(null);
-            }}
-            onCardDragOver={() => setDragOver(wallet.walletId)}
-            onCardDrop={(payload) => {
-              setDraggingFrom(null);
-              setDragOver(null);
-              move(payload.assetId, payload.fromWalletId, wallet.walletId);
-            }}
-            onMove={move}
-          />
-        ))}
+        {wallets.map((wallet) => {
+          const expanded = selectedWalletId === wallet.walletId;
+          return (
+            <WalletCard
+              key={wallet.walletId}
+              wallet={wallet}
+              allWallets={wallets}
+              expanded={expanded}
+              isDragSource={draggingFrom === wallet.walletId}
+              isDropTarget={
+                dragOver === wallet.walletId &&
+                draggingFrom !== null &&
+                draggingFrom !== wallet.walletId
+              }
+              onToggle={() =>
+                onSelectWallet(expanded ? null : wallet.walletId)
+              }
+              onAssetDragStart={() => setDraggingFrom(wallet.walletId)}
+              onAssetDragEnd={() => {
+                setDraggingFrom(null);
+                setDragOver(null);
+              }}
+              onCardDragOver={() => setDragOver(wallet.walletId)}
+              onCardDrop={(payload) => {
+                setDraggingFrom(null);
+                setDragOver(null);
+                move(payload.assetId, payload.fromWalletId, wallet.walletId);
+              }}
+              onMove={move}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -152,7 +152,9 @@ function WalletCard({
           ? "border-emerald-500 ring-2 ring-emerald-500/40"
           : isDragSource
             ? "opacity-60"
-            : ""
+            : expanded
+              ? "border-emerald-400 dark:border-emerald-700"
+              : ""
       }`}
     >
       <button
@@ -160,7 +162,7 @@ function WalletCard({
         onClick={onToggle}
         className="flex items-start justify-between gap-2 text-left"
       >
-        <div>
+        <div className="min-w-0">
           <span className="font-semibold text-black dark:text-zinc-50">
             <span className="mr-1 text-zinc-400">
               {expanded ? "▾" : "▸"}
@@ -173,7 +175,7 @@ function WalletCard({
             {wallet.assets.length === 1 ? "" : "s"}
           </p>
         </div>
-        <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+        <span className="shrink-0 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
           {wallet.currency}
         </span>
       </button>
@@ -208,7 +210,7 @@ function WalletCard({
       ) : null}
 
       {expanded ? (
-        <div className="flex flex-col gap-1.5 border-t border-black/[.06] pt-3 dark:border-white/[.08]">
+        <div className="flex flex-col gap-1 border-t border-black/[.06] pt-3 dark:border-white/[.08]">
           {wallet.assets.length === 0 ? (
             <p className="text-xs text-zinc-400">
               Aucun asset détenu dans ce wallet.
@@ -266,46 +268,50 @@ function WalletAssetRow({
         onAssetDragStart();
       }}
       onDragEnd={onAssetDragEnd}
-      className="flex cursor-grab items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-50 active:cursor-grabbing dark:hover:bg-zinc-900"
+      className="flex cursor-grab flex-col gap-1.5 rounded-lg px-2 py-2 hover:bg-zinc-50 active:cursor-grabbing dark:hover:bg-zinc-900"
     >
-      <div className="min-w-0">
-        <span className="text-zinc-300 dark:text-zinc-600">⠿</span>{" "}
-        <span className="text-sm font-medium text-black dark:text-zinc-50">
-          {line.name}
-        </span>{" "}
-        <span className="font-mono text-xs text-zinc-400">{line.symbol}</span>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          {formatQuantity(line.quantity)} ·{" "}
-          {formatCurrency(line.currentValue, wallet.currency)}
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-black dark:text-zinc-50">
+            <span className="mr-1 text-zinc-300 dark:text-zinc-600">⠿</span>
+            {line.name}{" "}
+            <span className="font-mono text-xs text-zinc-400">
+              {line.symbol}
+            </span>
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            {formatQuantity(line.quantity)} ·{" "}
+            {formatCurrency(line.currentValue, wallet.currency)}
+          </p>
+        </div>
+        <div className="shrink-0">
+          <GainBadge
+            gain={line.gain}
+            gainPct={line.gainPct}
+            currency={wallet.currency}
+            size="sm"
+          />
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <GainBadge
-          gain={line.gain}
-          gainPct={line.gainPct}
-          currency={wallet.currency}
-          size="sm"
-        />
-        {otherWallets.length > 0 ? (
-          <select
-            aria-label="Déplacer vers un autre wallet"
-            value=""
-            onChange={(event) => {
-              if (event.target.value) {
-                onMove(line.assetId, wallet.walletId, event.target.value);
-              }
-            }}
-            className="rounded-md border border-black/[.12] bg-white px-1.5 py-1 text-xs text-zinc-500 dark:border-white/[.16] dark:bg-black dark:text-zinc-400"
-          >
-            <option value="">Déplacer…</option>
-            {otherWallets.map((target) => (
-              <option key={target.walletId} value={target.walletId}>
-                → {target.name}
-              </option>
-            ))}
-          </select>
-        ) : null}
-      </div>
+      {otherWallets.length > 0 ? (
+        <select
+          aria-label="Déplacer vers un autre wallet"
+          value=""
+          onChange={(event) => {
+            if (event.target.value) {
+              onMove(line.assetId, wallet.walletId, event.target.value);
+            }
+          }}
+          className="w-full rounded-md border border-black/[.12] bg-white px-2 py-1 text-xs text-zinc-500 dark:border-white/[.16] dark:bg-black dark:text-zinc-400"
+        >
+          <option value="">Déplacer vers un autre wallet…</option>
+          {otherWallets.map((target) => (
+            <option key={target.walletId} value={target.walletId}>
+              → {target.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
     </div>
   );
 }

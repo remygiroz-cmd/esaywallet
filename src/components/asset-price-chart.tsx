@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  ReferenceLine,
   ResponsiveContainer,
 } from "recharts";
 import { formatCurrency } from "@/lib/format";
@@ -90,7 +91,15 @@ function ChartTooltip({ currency, active, payload, label }: ChartTooltipProps) {
   );
 }
 
-export function AssetPriceChart({ assetId }: { assetId: string }) {
+export function AssetPriceChart({
+  assetId,
+  breakEven,
+  breakEvenCurrency,
+}: {
+  assetId: string;
+  breakEven?: number;
+  breakEvenCurrency?: string;
+}) {
   const [range, setRange] = useState<RangeKey>("1J");
 
   const { data, isFetching, isError } = useQuery({
@@ -102,6 +111,13 @@ export function AssetPriceChart({ assetId }: { assetId: string }) {
   const history = data?.history ?? null;
   const points = history?.points ?? [];
   const currency = history?.currency ?? "EUR";
+
+  // The break-even line is only meaningful when expressed in the same
+  // currency as the chart.
+  const showBreakEven =
+    typeof breakEven === "number" &&
+    breakEven > 0 &&
+    breakEvenCurrency === currency;
 
   const first = points[0]?.price;
   const last = points[points.length - 1]?.price;
@@ -169,6 +185,23 @@ export function AssetPriceChart({ assetId }: { assetId: string }) {
                 width={48}
               />
               <Tooltip content={<ChartTooltip currency={currency} />} />
+              {showBreakEven ? (
+                <ReferenceLine
+                  y={breakEven}
+                  stroke="#f59e0b"
+                  strokeDasharray="5 4"
+                  strokeWidth={1.5}
+                  label={{
+                    value: `Seuil ${formatCurrency(
+                      breakEven as number,
+                      currency,
+                    )}`,
+                    position: "insideTopRight",
+                    fontSize: 10,
+                    fill: "#f59e0b",
+                  }}
+                />
+              ) : null}
               <Area
                 type="monotone"
                 dataKey="price"

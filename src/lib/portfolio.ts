@@ -95,6 +95,7 @@ export type AssetComputation = {
   quoteCurrency: string;
   totalQuantity: number; // open quantity still held
   avgCost: number; // reference currency, per unit (PMP)
+  avgBuyPrice: number; // quote currency — weighted average purchase price
   totalCost: number; // reference currency, open position
   currentValue: number; // reference currency
   gain: number; // reference currency, unrealised
@@ -420,7 +421,8 @@ function aggregateWallets(
       }
     }
 
-    assets.sort((a, b) => b.currentValue - a.currentValue);
+    // Best-performing assets first.
+    assets.sort((a, b) => b.gainPct - a.gainPct);
 
     const gain = currentValue - totalCost;
     return {
@@ -500,6 +502,16 @@ function aggregateAssets(
         ),
       ];
 
+      // Weighted-average purchase price, in the asset's quote currency.
+      let buyQuantity = 0;
+      let buyPriceWeighted = 0;
+      for (const lot of lots) {
+        buyQuantity += lot.quantity;
+        buyPriceWeighted += lot.unitPrice * lot.quantity;
+      }
+      const avgBuyPrice =
+        buyQuantity > 0 ? buyPriceWeighted / buyQuantity : 0;
+
       return {
         assetId: asset.id,
         name: asset.name,
@@ -508,6 +520,7 @@ function aggregateAssets(
         quoteCurrency: asset.quoteCurrency,
         totalQuantity,
         avgCost: totalQuantity > 0 ? totalCost / totalQuantity : 0,
+        avgBuyPrice,
         totalCost,
         currentValue,
         gain,

@@ -307,12 +307,7 @@ export async function importCmcAction(
   formData: FormData,
 ): Promise<BulkImportState> {
   const user = await requireUser();
-  const walletId = String(formData.get("wallet_CRYPTO") ?? "");
   const text = String(formData.get("data") ?? "");
-
-  if (!walletId) {
-    return { error: "Sélectionnez un wallet pour les cryptos." };
-  }
 
   const { rows } = parseCmcCsv(text);
   if (rows.length === 0) {
@@ -322,6 +317,17 @@ export async function importCmcAction(
   }
 
   const tokens = [...new Set(rows.map((row) => row.token))];
+
+  // One destination wallet per token, assigned in the review step.
+  const walletByToken = new Map<string, string>();
+  for (const token of tokens) {
+    const walletId = String(formData.get(`wallet_${token}`) ?? "");
+    if (!walletId) {
+      return { error: `Sélectionnez un wallet pour ${token}.` };
+    }
+    walletByToken.set(token, walletId);
+  }
+
   const resolutions = await Promise.allSettled(
     tokens.map((token) => resolveCoingeckoId(token)),
   );
@@ -350,7 +356,7 @@ export async function importCmcAction(
   const count = await createBulkTransactions(
     user.id,
     rows.map((row) => ({
-      walletId,
+      walletId: walletByToken.get(row.token) as string,
       assetId: assetIdByToken.get(row.token) as string,
       type: row.type,
       executedAt: new Date(row.executedAt),
@@ -374,15 +380,10 @@ export async function importCmcAction(
   };
 }
 
-const TR_CLASS_LABELS: Record<string, string> = {
-  STOCK: "actions",
-  ETF: "ETF / fonds",
-};
-
 // Imports a Trade Republic transaction-history CSV. Securities are
 // identified by ISIN, which is resolved to a Yahoo Finance symbol so live
-// prices work straight away. Each transaction is routed to a wallet based
-// on its asset class (stocks vs ETFs/funds).
+// prices work straight away. Each security is routed to the wallet chosen
+// for it in the review step.
 export async function importTrAction(
   _prev: BulkImportState,
   formData: FormData,
@@ -390,23 +391,9 @@ export async function importTrAction(
   const user = await requireUser();
   const text = String(formData.get("data") ?? "");
 
-  const { rows, classes } = parseTrCsv(text);
+  const { rows } = parseTrCsv(text);
   if (rows.length === 0) {
     return { error: "Aucune transaction valide trouvée dans le fichier." };
-  }
-
-  // One destination wallet per asset class found in the file.
-  const walletByClass = new Map<string, string>();
-  for (const assetClass of classes) {
-    const walletId = String(formData.get(`wallet_${assetClass}`) ?? "");
-    if (!walletId) {
-      return {
-        error: `Sélectionnez un wallet pour les ${
-          TR_CLASS_LABELS[assetClass] ?? assetClass
-        }.`,
-      };
-    }
-    walletByClass.set(assetClass, walletId);
   }
 
   // Group rows by ISIN so each security is resolved and created once.
@@ -417,6 +404,19 @@ export async function importTrAction(
     else rowsByIsin.set(row.isin, [row]);
   }
   const isins = [...rowsByIsin.keys()];
+
+  // One destination wallet per security, assigned in the review step.
+  const walletByIsin = new Map<string, string>();
+  for (const isin of isins) {
+    const walletId = String(formData.get(`wallet_${isin}`) ?? "");
+    if (!walletId) {
+      const sample = (rowsByIsin.get(isin) as typeof rows)[0];
+      return {
+        error: `Sélectionnez un wallet pour ${sample.name || isin}.`,
+      };
+    }
+    walletByIsin.set(isin, walletId);
+  }
 
   const resolutions = await Promise.allSettled(
     isins.map((isin) => resolveYahooSymbol(isin)),
@@ -447,7 +447,7 @@ export async function importTrAction(
   const count = await createBulkTransactions(
     user.id,
     rows.map((row) => ({
-      walletId: walletByClass.get(row.assetType) as string,
+      walletId: walletByIsin.get(row.isin) as string,
       assetId: assetIdByIsin.get(row.isin) as string,
       type: row.type,
       executedAt: new Date(row.executedAt),

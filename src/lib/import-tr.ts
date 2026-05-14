@@ -23,11 +23,18 @@ export type TrRow = {
   currency: string;
 };
 
+export type TrAsset = {
+  isin: string;
+  name: string;
+  assetType: "STOCK" | "ETF";
+};
+
 export type TrParseResult = {
   rows: TrRow[];
   skipped: number;
   isins: string[];
   classes: ("STOCK" | "ETF")[];
+  assets: TrAsset[];
 };
 
 function parseTrNumber(raw: string | undefined): number | null {
@@ -65,7 +72,7 @@ function columnIndex(header: string[], name: string): number {
 export function parseTrCsv(text: string): TrParseResult {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) {
-    return { rows: [], skipped: 0, isins: [], classes: [] };
+    return { rows: [], skipped: 0, isins: [], classes: [], assets: [] };
   }
 
   const header = parseCsvLine(lines[0]);
@@ -134,5 +141,24 @@ export function parseTrCsv(text: string): TrParseResult {
   const classes = [
     ...new Set(rows.map((row) => row.assetType)),
   ] as ("STOCK" | "ETF")[];
-  return { rows, skipped, isins: [...isinSet], classes };
+
+  // One entry per distinct security, in first-seen order.
+  const assetMap = new Map<string, TrAsset>();
+  for (const row of rows) {
+    if (!assetMap.has(row.isin)) {
+      assetMap.set(row.isin, {
+        isin: row.isin,
+        name: row.name,
+        assetType: row.assetType,
+      });
+    }
+  }
+
+  return {
+    rows,
+    skipped,
+    isins: [...isinSet],
+    classes,
+    assets: [...assetMap.values()],
+  };
 }
