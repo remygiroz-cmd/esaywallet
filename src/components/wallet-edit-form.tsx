@@ -9,13 +9,20 @@ import {
   WALLET_TYPES,
   WALLET_TYPE_LABELS,
   SUPPORTED_CURRENCIES,
+  taxRateForWalletType,
 } from "@/lib/constants";
 import { ui } from "@/lib/ui";
 
 const initialState: WalletFormState = {};
 
 type WalletEditFormProps = {
-  wallet: { id: string; name: string; type: string; currency: string };
+  wallet: {
+    id: string;
+    name: string;
+    type: string;
+    currency: string;
+    taxRate: number | null;
+  };
 };
 
 export function WalletEditForm({ wallet }: WalletEditFormProps) {
@@ -23,6 +30,10 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
     updateWalletAction,
     initialState,
   );
+
+  const defaultRatePercent = (
+    taxRateForWalletType(wallet.type) * 100
+  ).toLocaleString("fr-FR");
 
   return (
     <form action={formAction} className={`${ui.card} flex flex-col gap-4`}>
@@ -40,7 +51,7 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
         />
       </label>
 
-      <div className="flex gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <label className={`${ui.label} flex-1`}>
           Type
           <select
@@ -71,6 +82,24 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
           </select>
         </label>
       </div>
+
+      <label className={ui.label}>
+        Taux d&apos;imposition des plus-values (%)
+        <input
+          name="taxRate"
+          type="number"
+          step="any"
+          min="0"
+          max="100"
+          defaultValue={wallet.taxRate != null ? wallet.taxRate * 100 : ""}
+          placeholder={`Par défaut : ${defaultRatePercent} %`}
+          className={ui.input}
+        />
+        <span className="text-xs font-normal text-zinc-400">
+          Laissez vide pour utiliser le taux par défaut du type de wallet.
+          Utile par exemple pour un PEA de moins de 5 ans.
+        </span>
+      </label>
 
       {state.error ? <p className={ui.errorText}>{state.error}</p> : null}
       {state.ok ? (
