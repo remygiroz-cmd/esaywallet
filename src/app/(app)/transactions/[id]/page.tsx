@@ -67,6 +67,7 @@ export default async function TransactionDetailPage({
           id: transaction.id,
           walletId: transaction.walletId,
           assetId: transaction.assetId,
+          type: transaction.type,
           executedAt: toDateInputValue(transaction.executedAt),
           unitPrice: transaction.unitPrice.toNumber(),
           quantity: transaction.quantity.toNumber(),

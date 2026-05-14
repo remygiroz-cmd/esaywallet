@@ -2,23 +2,26 @@
 // lot, asset, wallet and global. No DB, no network: it takes plain data
 // and returns plain data, which keeps it easy to test.
 //
+// Accounting model:
+//  - A "position" is one (wallet, asset) pair. Its transactions are
+//    processed chronologically using the weighted-average cost method
+//    (PMP — prix moyen pondéré), the French standard.
+//  - A SELL realises a gain/loss against the running average cost and
+//    draws down the open quantity and cost basis.
+//  - "Unrealised" figures cover the still-open position; "realised"
+//    figures come from sells.
+//
 // Currency model:
 //  - lot & wallet figures are expressed in the wallet's own currency;
-//  - asset & global figures are expressed in the reference currency (EUR),
-//    since they aggregate lots that may live in different currencies.
-// A lot whose live price is unavailable is treated as flat (current value
-// = cost) in the aggregates, and flagged via `hasMissingPrice`.
+//  - asset & global figures roll up into the reference currency (EUR).
+// A position whose live price is unavailable is treated as flat (current
+// value = open cost) in the aggregates, and flagged via `hasMissingPrice`.
 
 import { buildFxRateMap, convertCurrency } from "@/lib/currency";
-import { DEFAULT_CURRENCY } from "@/lib/constants";
+import { DEFAULT_CURRENCY, taxRateForWalletType } from "@/lib/constants";
 
 export type PortfolioInput = {
-  wallets: {
-    id: string;
-    name: string;
-    type: string;
-    currency: string;
-  }[];
+  wallets: { id: string; name: string; type: string; currency: string }[];
   assets: {
     id: string;
     name: string;
@@ -30,9 +33,11 @@ export type PortfolioInput = {
     id: string;
     walletId: string;
     assetId: string;
+    type: string; // "BUY" | "SELL"
     executedAt: string;
     unitPrice: number;
     quantity: number;
+    // For a BUY: amount invested. For a SELL: amount received (proceeds).
     amountInvested: number;
     fees: number;
   }[];
@@ -45,6 +50,7 @@ export type PortfolioInput = {
   fxRates: { quote: string; rate: number }[];
 };
 
+// One BUY transaction, valued at the current price as if still fully held.
 export type LotComputation = {
   transactionId: string;
   assetId: string;
@@ -65,22 +71,40 @@ export type LotComputation = {
   priceFetchedAt: string | null;
 };
 
+// One SELL transaction, realised against the weighted-average cost.
+export type SaleComputation = {
+  transactionId: string;
+  walletId: string;
+  walletName: string;
+  walletCurrency: string;
+  executedAt: string;
+  quantity: number;
+  unitPrice: number;
+  proceeds: number; // wallet currency, net of fees
+  costOfSold: number; // wallet currency, PMP-based
+  realizedGain: number; // wallet currency
+  realizedGainPct: number;
+};
+
 export type AssetComputation = {
   assetId: string;
   name: string;
   symbol: string;
   type: string;
   quoteCurrency: string;
-  totalQuantity: number;
-  avgCost: number; // reference currency, per unit
-  totalCost: number; // reference currency
+  totalQuantity: number; // open quantity still held
+  avgCost: number; // reference currency, per unit (PMP)
+  totalCost: number; // reference currency, open position
   currentValue: number; // reference currency
-  gain: number; // reference currency
+  gain: number; // reference currency, unrealised
   gainPct: number;
+  realizedGain: number; // reference currency
   currentPrice: number | null;
   currentPriceCurrency: string | null;
   hasMissingPrice: boolean;
+  hasSales: boolean;
   lots: LotComputation[];
+  sales: SaleComputation[];
 };
 
 export type WalletComputation = {
@@ -88,10 +112,12 @@ export type WalletComputation = {
   name: string;
   type: string;
   currency: string;
-  totalCost: number; // wallet currency
+  totalCost: number; // wallet currency, open position
   currentValue: number; // wallet currency
-  gain: number; // wallet currency
+  gain: number; // wallet currency, unrealised
   gainPct: number;
+  realizedGain: number; // wallet currency
+  estimatedTax: number; // wallet currency, indicative
   hasMissingPrice: boolean;
   lots: LotComputation[];
 };
@@ -106,12 +132,27 @@ export type PortfolioComputation = {
   referenceCurrency: string;
   totalCost: number;
   currentValue: number;
-  gain: number;
+  gain: number; // unrealised
   gainPct: number;
+  realizedGain: number;
+  estimatedTax: number;
   hasMissingPrice: boolean;
   wallets: WalletComputation[];
   assets: AssetComputation[];
   generatedAt: string;
+};
+
+type PositionComputation = {
+  walletId: string;
+  assetId: string;
+  walletCurrency: string;
+  openQuantity: number;
+  openCostBasis: number; // wallet currency
+  realizedGain: number; // wallet currency
+  currentValue: number | null; // wallet currency
+  unrealizedGain: number | null; // wallet currency
+  lots: LotComputation[];
+  sales: SaleComputation[];
 };
 
 function ratio(gain: number, cost: number): number {
@@ -127,38 +168,139 @@ export function computePortfolio(
   const assetById = new Map(input.assets.map((a) => [a.id, a]));
   const priceByAsset = new Map(input.prices.map((p) => [p.assetId, p]));
 
-  // Converts an amount to the reference currency, falling back to the raw
-  // amount if a rate is genuinely missing (vanishingly rare in practice).
   const toReference = (amount: number, from: string): number =>
     convertCurrency(amount, from, referenceCurrency, fx) ?? amount;
 
-  const lots: LotComputation[] = [];
-
+  // Group transactions per (wallet, asset) position.
+  const groups = new Map<string, PortfolioInput["transactions"]>();
   for (const tx of input.transactions) {
-    const wallet = walletById.get(tx.walletId);
-    const asset = assetById.get(tx.assetId);
-    if (!wallet || !asset) continue;
+    if (!walletById.has(tx.walletId) || !assetById.has(tx.assetId)) continue;
+    const key = `${tx.walletId}::${tx.assetId}`;
+    const list = groups.get(key);
+    if (list) list.push(tx);
+    else groups.set(key, [tx]);
+  }
 
-    const costBasis = tx.amountInvested + tx.fees;
-    const price = priceByAsset.get(asset.id) ?? null;
+  const positions: PositionComputation[] = [];
+  for (const txs of groups.values()) {
+    positions.push(
+      computePosition(txs, walletById, assetById, priceByAsset, fx),
+    );
+  }
 
-    let currentValue: number | null = null;
-    let gain: number | null = null;
-    let gainPct: number | null = null;
+  const wallets = aggregateWallets(input.wallets, positions);
+  const assets = aggregateAssets(input.assets, positions, priceByAsset, toReference);
 
-    if (price) {
-      const valueInPriceCurrency = tx.quantity * price.price;
-      currentValue = convertCurrency(
-        valueInPriceCurrency,
-        price.currency,
-        wallet.currency,
-        fx,
+  let totalCost = 0;
+  let currentValue = 0;
+  let realizedGain = 0;
+  let hasMissingPrice = false;
+  for (const position of positions) {
+    const costRef = toReference(position.openCostBasis, position.walletCurrency);
+    totalCost += costRef;
+    realizedGain += toReference(
+      position.realizedGain,
+      position.walletCurrency,
+    );
+    if (position.currentValue === null) {
+      hasMissingPrice = true;
+      currentValue += costRef;
+    } else {
+      currentValue += toReference(
+        position.currentValue,
+        position.walletCurrency,
       );
-      if (currentValue !== null) {
-        gain = currentValue - costBasis;
-        gainPct = ratio(gain, costBasis);
-      }
     }
+  }
+  const gain = currentValue - totalCost;
+
+  let estimatedTax = 0;
+  for (const wallet of wallets) {
+    estimatedTax += toReference(wallet.estimatedTax, wallet.currency);
+  }
+
+  return {
+    referenceCurrency,
+    totalCost,
+    currentValue,
+    gain,
+    gainPct: ratio(gain, totalCost),
+    realizedGain,
+    estimatedTax,
+    hasMissingPrice,
+    wallets,
+    assets,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function computePosition(
+  txs: PortfolioInput["transactions"],
+  walletById: Map<string, PortfolioInput["wallets"][number]>,
+  assetById: Map<string, PortfolioInput["assets"][number]>,
+  priceByAsset: Map<string, PortfolioInput["prices"][number]>,
+  fx: ReturnType<typeof buildFxRateMap>,
+): PositionComputation {
+  const wallet = walletById.get(txs[0].walletId)!;
+  const asset = assetById.get(txs[0].assetId)!;
+  const price = priceByAsset.get(asset.id) ?? null;
+
+  const ordered = [...txs].sort((a, b) =>
+    a.executedAt < b.executedAt ? -1 : a.executedAt > b.executedAt ? 1 : 0,
+  );
+
+  let quantity = 0;
+  let costBasis = 0;
+  let realizedGain = 0;
+  const lots: LotComputation[] = [];
+  const sales: SaleComputation[] = [];
+
+  // Converts a value priced in the asset/price currency to wallet currency.
+  const priceToWallet = (valueInPriceCurrency: number): number | null =>
+    price
+      ? convertCurrency(valueInPriceCurrency, price.currency, wallet.currency, fx)
+      : null;
+
+  for (const tx of ordered) {
+    if (tx.type === "SELL") {
+      const pmp = quantity > 0 ? costBasis / quantity : 0;
+      const soldQuantity = Math.min(tx.quantity, quantity);
+      const costOfSold = pmp * soldQuantity;
+      const proceeds = tx.amountInvested - tx.fees;
+      const saleGain = proceeds - costOfSold;
+
+      realizedGain += saleGain;
+      quantity = Math.max(0, quantity - tx.quantity);
+      costBasis = Math.max(0, costBasis - costOfSold);
+
+      sales.push({
+        transactionId: tx.id,
+        walletId: wallet.id,
+        walletName: wallet.name,
+        walletCurrency: wallet.currency,
+        executedAt: tx.executedAt,
+        quantity: tx.quantity,
+        unitPrice: tx.unitPrice,
+        proceeds,
+        costOfSold,
+        realizedGain: saleGain,
+        realizedGainPct: ratio(saleGain, costOfSold),
+      });
+      continue;
+    }
+
+    // BUY
+    const lotCost = tx.amountInvested + tx.fees;
+    quantity += tx.quantity;
+    costBasis += lotCost;
+
+    const lotValueInPriceCurrency = price ? tx.quantity * price.price : null;
+    const lotCurrentValue =
+      lotValueInPriceCurrency !== null
+        ? priceToWallet(lotValueInPriceCurrency)
+        : null;
+    const lotGain =
+      lotCurrentValue !== null ? lotCurrentValue - lotCost : null;
 
     lots.push({
       transactionId: tx.id,
@@ -171,66 +313,61 @@ export function computePortfolio(
       executedAt: tx.executedAt,
       quantity: tx.quantity,
       unitPrice: tx.unitPrice,
-      costBasis,
+      costBasis: lotCost,
       currentPrice: price?.price ?? null,
       currentPriceCurrency: price?.currency ?? null,
-      currentValue,
-      gain,
-      gainPct,
+      currentValue: lotCurrentValue,
+      gain: lotGain,
+      gainPct: lotGain !== null ? ratio(lotGain, lotCost) : null,
       priceFetchedAt: price?.fetchedAt ?? null,
     });
   }
 
-  const wallets = aggregateWallets(input.wallets, lots);
-  const assets = aggregateAssets(input.assets, lots, priceByAsset, toReference);
-
-  let totalCost = 0;
-  let currentValue = 0;
-  let hasMissingPrice = false;
-  for (const lot of lots) {
-    const wallet = walletById.get(lot.walletId);
-    if (!wallet) continue;
-    const costRef = toReference(lot.costBasis, wallet.currency);
-    totalCost += costRef;
-    if (lot.currentValue === null) {
-      hasMissingPrice = true;
-      currentValue += costRef; // treat as flat until the price loads
-    } else {
-      currentValue += toReference(lot.currentValue, wallet.currency);
-    }
-  }
-  const gain = currentValue - totalCost;
+  const openValueInPriceCurrency = price ? quantity * price.price : null;
+  const currentValue =
+    openValueInPriceCurrency !== null
+      ? priceToWallet(openValueInPriceCurrency)
+      : null;
 
   return {
-    referenceCurrency,
-    totalCost,
+    walletId: wallet.id,
+    assetId: asset.id,
+    walletCurrency: wallet.currency,
+    openQuantity: quantity,
+    openCostBasis: costBasis,
+    realizedGain,
     currentValue,
-    gain,
-    gainPct: ratio(gain, totalCost),
-    hasMissingPrice,
-    wallets,
-    assets,
-    generatedAt: new Date().toISOString(),
+    unrealizedGain:
+      currentValue !== null ? currentValue - costBasis : null,
+    lots,
+    sales,
   };
 }
 
 function aggregateWallets(
   wallets: PortfolioInput["wallets"],
-  lots: LotComputation[],
+  positions: PositionComputation[],
 ): WalletComputation[] {
   return wallets.map((wallet) => {
-    const walletLots = lots.filter((lot) => lot.walletId === wallet.id);
+    const walletPositions = positions.filter(
+      (position) => position.walletId === wallet.id,
+    );
+
     let totalCost = 0;
     let currentValue = 0;
+    let realizedGain = 0;
     let hasMissingPrice = false;
+    const lots: LotComputation[] = [];
 
-    for (const lot of walletLots) {
-      totalCost += lot.costBasis;
-      if (lot.currentValue === null) {
+    for (const position of walletPositions) {
+      totalCost += position.openCostBasis;
+      realizedGain += position.realizedGain;
+      lots.push(...position.lots);
+      if (position.currentValue === null) {
         hasMissingPrice = true;
-        currentValue += lot.costBasis;
+        currentValue += position.openCostBasis;
       } else {
-        currentValue += lot.currentValue;
+        currentValue += position.currentValue;
       }
     }
 
@@ -244,40 +381,59 @@ function aggregateWallets(
       currentValue,
       gain,
       gainPct: ratio(gain, totalCost),
+      realizedGain,
+      estimatedTax:
+        Math.max(0, realizedGain) * taxRateForWalletType(wallet.type),
       hasMissingPrice,
-      lots: walletLots,
+      lots,
     };
   });
 }
 
 function aggregateAssets(
   assets: PortfolioInput["assets"],
-  lots: LotComputation[],
+  positions: PositionComputation[],
   priceByAsset: Map<string, PortfolioInput["prices"][number]>,
   toReference: (amount: number, from: string) => number,
 ): AssetComputation[] {
-  const walletCurrencyByLot = new Map(
-    lots.map((lot) => [lot.transactionId, lot.walletCurrency]),
-  );
-
   return assets
     .map((asset) => {
-      const assetLots = lots.filter((lot) => lot.assetId === asset.id);
+      const assetPositions = positions.filter(
+        (position) => position.assetId === asset.id,
+      );
+      if (assetPositions.length === 0) return null;
+
       let totalQuantity = 0;
       let totalCost = 0;
       let currentValue = 0;
+      let realizedGain = 0;
       let hasMissingPrice = false;
+      let hasSales = false;
+      const lots: LotComputation[] = [];
+      const sales: SaleComputation[] = [];
 
-      for (const lot of assetLots) {
-        const currency = walletCurrencyByLot.get(lot.transactionId) ?? "EUR";
-        const costRef = toReference(lot.costBasis, currency);
-        totalQuantity += lot.quantity;
+      for (const position of assetPositions) {
+        const costRef = toReference(
+          position.openCostBasis,
+          position.walletCurrency,
+        );
+        totalQuantity += position.openQuantity;
         totalCost += costRef;
-        if (lot.currentValue === null) {
+        realizedGain += toReference(
+          position.realizedGain,
+          position.walletCurrency,
+        );
+        lots.push(...position.lots);
+        sales.push(...position.sales);
+        if (position.sales.length > 0) hasSales = true;
+        if (position.currentValue === null) {
           hasMissingPrice = true;
           currentValue += costRef;
         } else {
-          currentValue += toReference(lot.currentValue, currency);
+          currentValue += toReference(
+            position.currentValue,
+            position.walletCurrency,
+          );
         }
       }
 
@@ -296,11 +452,25 @@ function aggregateAssets(
         currentValue,
         gain,
         gainPct: ratio(gain, totalCost),
+        realizedGain,
         currentPrice: price?.price ?? null,
         currentPriceCurrency: price?.currency ?? null,
         hasMissingPrice,
-        lots: assetLots,
+        hasSales,
+        lots: lots.sort((a, b) =>
+          a.executedAt < b.executedAt ? 1 : -1,
+        ),
+        sales: sales.sort((a, b) =>
+          a.executedAt < b.executedAt ? 1 : -1,
+        ),
       };
     })
-    .filter((asset) => asset.lots.length > 0);
+    .filter((asset): asset is AssetComputation => asset !== null)
+    // Keep assets that are still held or that have realised history.
+    .filter(
+      (asset) =>
+        asset.totalQuantity > 0 ||
+        asset.sales.length > 0 ||
+        asset.lots.length > 0,
+    );
 }

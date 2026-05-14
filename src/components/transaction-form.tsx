@@ -30,6 +30,7 @@ type TransactionValues = {
   id: string;
   walletId: string;
   assetId: string;
+  type: string;
   executedAt: string;
   unitPrice: number;
   quantity: number;
@@ -84,24 +85,52 @@ function TransactionFormBody({
   pending: boolean;
   error?: string;
 }) {
+  const [txType, setTxType] = useState(transaction?.type ?? "BUY");
   const defaultAssetSelection =
     transaction?.assetId ?? (assets.length > 0 ? assets[0].id : NEW_ASSET);
   const [assetSelection, setAssetSelection] = useState(defaultAssetSelection);
   const [newAssetType, setNewAssetType] = useState("STOCK");
 
-  const creatingAsset = assetSelection === NEW_ASSET;
+  const isSell = txType === "SELL";
+  const creatingAsset = !isSell && assetSelection === NEW_ASSET;
   const isCryptoAsset = newAssetType === "CRYPTO";
+
+  function handleTypeChange(nextType: string) {
+    setTxType(nextType);
+    // A brand-new asset cannot be sold — fall back to an existing one.
+    if (nextType === "SELL" && assetSelection === NEW_ASSET) {
+      setAssetSelection(assets[0]?.id ?? "");
+    }
+  }
 
   return (
     <form action={formAction} className={`${ui.card} flex flex-col gap-4`}>
       {transaction ? (
         <input type="hidden" name="id" value={transaction.id} />
       ) : null}
+      <input type="hidden" name="type" value={txType} />
       <input
         type="hidden"
         name="assetMode"
         value={creatingAsset ? "new" : "existing"}
       />
+
+      <div className="flex gap-2">
+        {(["BUY", "SELL"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => handleTypeChange(option)}
+            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              txType === option
+                ? "bg-emerald-600 text-white"
+                : "border border-black/[.12] text-zinc-600 hover:bg-zinc-100 dark:border-white/[.16] dark:text-zinc-400 dark:hover:bg-zinc-900"
+            }`}
+          >
+            {option === "BUY" ? "Achat" : "Vente"}
+          </button>
+        ))}
+      </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <label className={`${ui.label} flex-1`}>
@@ -128,12 +157,17 @@ function TransactionFormBody({
             onChange={(event) => setAssetSelection(event.target.value)}
             className={ui.input}
           >
+            {assets.length === 0 && isSell ? (
+              <option value="">Aucun asset disponible</option>
+            ) : null}
             {assets.map((asset) => (
               <option key={asset.id} value={asset.id}>
                 {asset.name} ({asset.symbol})
               </option>
             ))}
-            <option value={NEW_ASSET}>➕ Nouvel asset…</option>
+            {!isSell ? (
+              <option value={NEW_ASSET}>➕ Nouvel asset…</option>
+            ) : null}
           </select>
         </label>
       </div>
@@ -217,7 +251,7 @@ function TransactionFormBody({
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <label className={`${ui.label} flex-1`}>
-          Date d&apos;achat
+          {isSell ? "Date de vente" : "Date d'achat"}
           <input
             name="executedAt"
             type="date"
@@ -227,7 +261,7 @@ function TransactionFormBody({
           />
         </label>
         <label className={`${ui.label} flex-1`}>
-          Prix d&apos;achat unitaire
+          {isSell ? "Prix de vente unitaire" : "Prix d'achat unitaire"}
           <input
             name="unitPrice"
             type="number"
@@ -243,7 +277,7 @@ function TransactionFormBody({
 
       <div className="flex flex-col gap-4 sm:flex-row">
         <label className={`${ui.label} flex-1`}>
-          Quantité reçue
+          {isSell ? "Quantité vendue" : "Quantité reçue"}
           <input
             name="quantity"
             type="number"
@@ -256,7 +290,7 @@ function TransactionFormBody({
           />
         </label>
         <label className={`${ui.label} flex-1`}>
-          Montant investi
+          {isSell ? "Montant reçu" : "Montant investi"}
           <input
             name="amountInvested"
             type="number"
@@ -268,8 +302,9 @@ function TransactionFormBody({
             className={ui.input}
           />
           <span className="text-xs font-normal text-zinc-400">
-            Montant investi dans l&apos;asset, dans la devise du wallet (hors
-            frais).
+            {isSell
+              ? "Total reçu pour cette vente, dans la devise du wallet (hors frais)."
+              : "Montant investi dans l'asset, dans la devise du wallet (hors frais)."}
           </span>
         </label>
         <label className={`${ui.label} sm:w-36`}>
@@ -305,7 +340,9 @@ function TransactionFormBody({
             ? "Enregistrement…"
             : editing
               ? "Enregistrer"
-              : "Ajouter la transaction"}
+              : isSell
+                ? "Ajouter la vente"
+                : "Ajouter l'achat"}
         </button>
       </div>
     </form>

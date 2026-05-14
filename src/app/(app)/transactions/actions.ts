@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth-server";
-import { ASSET_TYPES, SUPPORTED_CURRENCIES } from "@/lib/constants";
+import {
+  ASSET_TYPES,
+  SUPPORTED_CURRENCIES,
+  TRANSACTION_TYPES,
+} from "@/lib/constants";
 import { upsertAsset } from "@/lib/assets";
 import {
   createTransaction,
@@ -21,6 +25,7 @@ export type TransactionFormState = {
 
 const txSchema = z.object({
   walletId: z.string().min(1, "Sélectionnez un wallet"),
+  type: z.enum(TRANSACTION_TYPES),
   executedAt: z.coerce.date(),
   unitPrice: z.coerce.number().positive("Le prix d'achat doit être positif"),
   quantity: z.coerce.number().positive("La quantité doit être positive"),
@@ -42,6 +47,7 @@ const newAssetSchema = z.object({
 function parseTransaction(formData: FormData) {
   return txSchema.safeParse({
     walletId: formData.get("walletId"),
+    type: formData.get("type"),
     executedAt: formData.get("executedAt"),
     unitPrice: formData.get("unitPrice"),
     quantity: formData.get("quantity"),
@@ -95,13 +101,17 @@ export async function createTransactionAction(
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
 
+  if (parsed.data.type === "SELL" && formData.get("assetMode") === "new") {
+    return { error: "Un asset doit déjà exister pour être vendu." };
+  }
+
   const assetResult = await resolveAssetId(user.id, formData);
   if ("error" in assetResult) return { error: assetResult.error };
 
   const tx = await createTransaction(user.id, {
     walletId: parsed.data.walletId,
     assetId: assetResult.assetId,
-    type: "BUY",
+    type: parsed.data.type,
     executedAt: parsed.data.executedAt,
     unitPrice: parsed.data.unitPrice,
     quantity: parsed.data.quantity,
@@ -130,13 +140,17 @@ export async function updateTransactionAction(
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
 
+  if (parsed.data.type === "SELL" && formData.get("assetMode") === "new") {
+    return { error: "Un asset doit déjà exister pour être vendu." };
+  }
+
   const assetResult = await resolveAssetId(user.id, formData);
   if ("error" in assetResult) return { error: assetResult.error };
 
   const tx = await updateTransaction(id, user.id, {
     walletId: parsed.data.walletId,
     assetId: assetResult.assetId,
-    type: "BUY",
+    type: parsed.data.type,
     executedAt: parsed.data.executedAt,
     unitPrice: parsed.data.unitPrice,
     quantity: parsed.data.quantity,

@@ -28,3 +28,26 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   ETF: "ETF",
   CRYPTO: "Cryptomonnaie",
 };
+
+export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
+  BUY: "Achat",
+  SELL: "Vente",
+};
+
+// Indicative French tax rates applied to net realised gains, by wallet type:
+//  - CTO / crypto / autre : flat tax (PFU) 30 %
+//  - PEA : income-tax exempt, only social contributions (17,2 %)
+//  - Livret : tax-free savings
+// These are estimates only — real taxation depends on holding period and
+// the investor's situation.
+export const TAX_RATE_BY_WALLET_TYPE: Record<WalletType, number> = {
+  CTO: 0.3,
+  PEA: 0.172,
+  CRYPTO: 0.3,
+  LIVRET: 0,
+  OTHER: 0.3,
+};
+
+export function taxRateForWalletType(type: string): number {
+  return TAX_RATE_BY_WALLET_TYPE[type as WalletType] ?? 0.3;
+}

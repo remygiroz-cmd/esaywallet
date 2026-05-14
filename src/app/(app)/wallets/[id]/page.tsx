@@ -7,6 +7,7 @@ import { WALLET_TYPE_LABELS, type WalletType } from "@/lib/constants";
 import { ui } from "@/lib/ui";
 import { formatCurrency, formatQuantity, formatDate } from "@/lib/format";
 import { WalletEditForm } from "@/components/wallet-edit-form";
+import { TransactionTypeBadge } from "@/components/transaction-type-badge";
 import { DeleteButton } from "@/components/delete-button";
 import { deleteWalletAction } from "../actions";
 import { deleteTransactionAction } from "@/app/(app)/transactions/actions";
@@ -80,12 +81,13 @@ export default async function WalletDetailPage({
               <thead>
                 <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
                   <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Asset</th>
                   <th className="px-4 py-3 text-right font-medium">Quantité</th>
                   <th className="px-4 py-3 text-right font-medium">
                     Prix unitaire
                   </th>
-                  <th className="px-4 py-3 text-right font-medium">Investi</th>
+                  <th className="px-4 py-3 text-right font-medium">Montant</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -97,6 +99,9 @@ export default async function WalletDetailPage({
                   >
                     <td className="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
                       {formatDate(tx.executedAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <TransactionTypeBadge type={tx.type} />
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-medium text-black dark:text-zinc-50">

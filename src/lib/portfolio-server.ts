@@ -37,6 +37,7 @@ export async function loadPortfolioInput(
       id: tx.id,
       walletId: tx.walletId,
       assetId: tx.assetId,
+      type: tx.type,
       executedAt: tx.executedAt.toISOString(),
       unitPrice: tx.unitPrice.toNumber(),
       quantity: tx.quantity.toNumber(),

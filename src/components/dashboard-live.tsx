@@ -7,6 +7,7 @@ import type {
   PortfolioComputation,
   WalletComputation,
   AssetComputation,
+  SaleComputation,
   PortfolioSnapshotPoint,
 } from "@/lib/portfolio";
 import {
@@ -20,6 +21,7 @@ import {
   formatQuantity,
   formatDate,
   formatDateTime,
+  formatSignedCurrency,
 } from "@/lib/format";
 import { ui } from "@/lib/ui";
 import { GainBadge } from "./gain-badge";
@@ -122,6 +124,10 @@ export function DashboardLive({
 
           <GlobalSummary portfolio={portfolio} />
 
+          {portfolio.realizedGain !== 0 || portfolio.estimatedTax > 0 ? (
+            <RealizedSummary portfolio={portfolio} />
+          ) : null}
+
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Évolution
@@ -222,6 +228,46 @@ function GlobalSummary({ portfolio }: { portfolio: PortfolioComputation }) {
   );
 }
 
+function RealizedSummary({ portfolio }: { portfolio: PortfolioComputation }) {
+  const currency = portfolio.referenceCurrency;
+  return (
+    <div className="rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.12] dark:bg-zinc-950">
+      <p className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+        Réalisé &amp; fiscalité
+      </p>
+      <div className="mt-2 flex flex-wrap items-end gap-x-10 gap-y-4">
+        <div>
+          <p
+            className={`text-2xl font-semibold tabular-nums ${
+              portfolio.realizedGain >= 0
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-red-600 dark:text-red-400"
+            }`}
+          >
+            {formatSignedCurrency(portfolio.realizedGain, currency)}
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Plus / moins-value réalisée
+          </p>
+        </div>
+        <div>
+          <p className="text-base font-medium text-zinc-600 tabular-nums dark:text-zinc-300">
+            {formatCurrency(portfolio.estimatedTax, currency)}
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Impôt estimé
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-zinc-400">
+        Estimation indicative (PFU 30 % en CTO/crypto, 17,2 % en PEA). La
+        fiscalité réelle dépend de votre situation et de la durée de
+        détention.
+      </p>
+    </div>
+  );
+}
+
 function WalletCard({ wallet }: { wallet: WalletComputation }) {
   return (
     <div className={`${ui.card} flex flex-col gap-3`}>
@@ -257,6 +303,14 @@ function WalletCard({ wallet }: { wallet: WalletComputation }) {
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         Investi : {formatCurrency(wallet.totalCost, wallet.currency)}
       </p>
+      {wallet.realizedGain !== 0 ? (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Réalisé : {formatSignedCurrency(wallet.realizedGain, wallet.currency)}
+          {wallet.estimatedTax > 0
+            ? ` · impôt estimé ${formatCurrency(wallet.estimatedTax, wallet.currency)}`
+            : ""}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -306,65 +360,142 @@ function AssetRow({
             currency={referenceCurrency}
             size="sm"
           />
+          {asset.hasSales ? (
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              Réalisé :{" "}
+              {formatSignedCurrency(asset.realizedGain, referenceCurrency)}
+            </p>
+          ) : null}
         </div>
       </button>
 
       {expanded ? (
-        <div className="border-t border-black/[.06] px-5 py-3 dark:border-white/[.08]">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-zinc-400">
-                <th className="py-2 font-medium">Date</th>
-                <th className="py-2 font-medium">Wallet</th>
-                <th className="py-2 text-right font-medium">Quantité</th>
-                <th className="py-2 text-right font-medium">Investi</th>
-                <th className="py-2 text-right font-medium">Valeur</th>
-                <th className="py-2 text-right font-medium">+/- value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {asset.lots.map((lot) => (
-                <tr
-                  key={lot.transactionId}
-                  className="border-t border-black/[.04] dark:border-white/[.05]"
-                >
-                  <td className="py-2 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
-                    {formatDate(lot.executedAt)}
-                  </td>
-                  <td className="py-2 text-zinc-600 dark:text-zinc-300">
-                    {lot.walletName}
-                  </td>
-                  <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
-                    {formatQuantity(lot.quantity)}
-                  </td>
-                  <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
-                    {formatCurrency(lot.costBasis, lot.walletCurrency)}
-                  </td>
-                  <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
-                    {lot.currentValue !== null
-                      ? formatCurrency(lot.currentValue, lot.walletCurrency)
-                      : "—"}
-                  </td>
-                  <td className="py-2 text-right">
-                    {lot.gain !== null && lot.gainPct !== null ? (
-                      <GainBadge
-                        gain={lot.gain}
-                        gainPct={lot.gainPct}
-                        currency={lot.walletCurrency}
-                        size="sm"
-                      />
-                    ) : (
-                      <span className="text-xs text-zinc-400">
-                        prix indisponible
-                      </span>
-                    )}
-                  </td>
+        <div className="flex flex-col gap-4 border-t border-black/[.06] px-5 py-3 dark:border-white/[.08]">
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+              Achats
+            </p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-zinc-400">
+                  <th className="py-2 font-medium">Date</th>
+                  <th className="py-2 font-medium">Wallet</th>
+                  <th className="py-2 text-right font-medium">Quantité</th>
+                  <th className="py-2 text-right font-medium">Investi</th>
+                  <th className="py-2 text-right font-medium">Valeur</th>
+                  <th className="py-2 text-right font-medium">+/- value</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {asset.lots.map((lot) => (
+                  <tr
+                    key={lot.transactionId}
+                    className="border-t border-black/[.04] dark:border-white/[.05]"
+                  >
+                    <td className="py-2 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                      {formatDate(lot.executedAt)}
+                    </td>
+                    <td className="py-2 text-zinc-600 dark:text-zinc-300">
+                      {lot.walletName}
+                    </td>
+                    <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
+                      {formatQuantity(lot.quantity)}
+                    </td>
+                    <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
+                      {formatCurrency(lot.costBasis, lot.walletCurrency)}
+                    </td>
+                    <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
+                      {lot.currentValue !== null
+                        ? formatCurrency(lot.currentValue, lot.walletCurrency)
+                        : "—"}
+                    </td>
+                    <td className="py-2 text-right">
+                      {lot.gain !== null && lot.gainPct !== null ? (
+                        <GainBadge
+                          gain={lot.gain}
+                          gainPct={lot.gainPct}
+                          currency={lot.walletCurrency}
+                          size="sm"
+                        />
+                      ) : (
+                        <span className="text-xs text-zinc-400">
+                          prix indisponible
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {asset.sales.length > 0 ? (
+            <SalesTable sales={asset.sales} />
+          ) : null}
+
+          {asset.hasSales ? (
+            <p className="text-xs text-zinc-400">
+              Cette position comporte des ventes : la valeur de chaque achat
+              ci-dessus est indicative (aux cours actuels), tandis que les
+              agrégats utilisent le prix moyen pondéré.
+            </p>
+          ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function SalesTable({ sales }: { sales: SaleComputation[] }) {
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+        Ventes
+      </p>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-zinc-400">
+            <th className="py-2 font-medium">Date</th>
+            <th className="py-2 font-medium">Wallet</th>
+            <th className="py-2 text-right font-medium">Quantité</th>
+            <th className="py-2 text-right font-medium">Reçu</th>
+            <th className="py-2 text-right font-medium">Coût (PMP)</th>
+            <th className="py-2 text-right font-medium">+/- value réalisée</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sales.map((sale) => (
+            <tr
+              key={sale.transactionId}
+              className="border-t border-black/[.04] dark:border-white/[.05]"
+            >
+              <td className="py-2 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                {formatDate(sale.executedAt)}
+              </td>
+              <td className="py-2 text-zinc-600 dark:text-zinc-300">
+                {sale.walletName}
+              </td>
+              <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
+                {formatQuantity(sale.quantity)}
+              </td>
+              <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
+                {formatCurrency(sale.proceeds, sale.walletCurrency)}
+              </td>
+              <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
+                {formatCurrency(sale.costOfSold, sale.walletCurrency)}
+              </td>
+              <td className="py-2 text-right">
+                <GainBadge
+                  gain={sale.realizedGain}
+                  gainPct={sale.realizedGainPct}
+                  currency={sale.walletCurrency}
+                  size="sm"
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
