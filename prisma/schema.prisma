@@ -1,0 +1,119 @@
+// easyWallet — data model
+// Docs: https://pris.ly/d/prisma-schema
+//
+// Note: SQLite (dev) does not support native enums, so "type" fields are
+// stored as String. Allowed values are documented inline and enforced in
+// application code (see src/lib/constants.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallets   Wallet[]
+  snapshots PortfolioSnapshot[]
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      String // CTO | PEA | CRYPTO | LIVRET | OTHER
+  currency  String   @default("EUR") // reference currency of the wallet
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+  snapshots    PortfolioSnapshot[]
+
+  @@index([userId])
+}
+
+model Asset {
+  id            String   @id @default(cuid())
+  symbol        String // internal ticker / identifier
+  name          String
+  type          String // STOCK | ETF | CRYPTO
+  quoteCurrency String   @default("EUR") // currency the asset is priced in
+  // External provider identifiers used to fetch live prices
+  coingeckoId   String?
+  yahooSymbol   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transactions Transaction[]
+  price        PriceCache?
+
+  @@unique([symbol, type])
+}
+
+model Transaction {
+  id             String   @id @default(cuid())
+  walletId       String
+  wallet         Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  assetId        String
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  type           String   @default("BUY") // BUY | SELL
+  executedAt     DateTime // purchase/sale date
+  unitPrice      Decimal // price per unit, in the asset quote currency
+  quantity       Decimal // number of units received/sold
+  amountInvested Decimal // total amount invested, in the wallet currency
+  fees           Decimal  @default(0)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([walletId])
+  @@index([assetId])
+}
+
+// Latest known price for an asset (refreshed by the price service).
+model PriceCache {
+  id        String   @id @default(cuid())
+  assetId   String   @unique
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  price     Decimal
+  currency  String
+  fetchedAt DateTime @default(now())
+}
+
+// Cached foreign-exchange rate (e.g. USD -> EUR) for currency conversion.
+model FxRate {
+  id        String   @id @default(cuid())
+  base      String
+  quote     String
+  rate      Decimal
+  fetchedAt DateTime @default(now())
+
+  @@unique([base, quote])
+}
+
+// Daily snapshot of portfolio value, feeding the historical performance chart.
+// walletId null = snapshot across all wallets for the user.
+model PortfolioSnapshot {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId      String?
+  wallet        Wallet?  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  date          DateTime
+  totalValue    Decimal // portfolio value in the reference currency
+  totalInvested Decimal
+  currency      String   @default("EUR")
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, walletId, date])
+  @@index([userId, date])
+}
