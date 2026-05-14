@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
     "@prisma/client": "^6.19.3",
     "@tanstack/react-query": "^5.100.10",
     "bcryptjs": "^3.0.3",
