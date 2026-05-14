@@ -12,6 +12,7 @@ import {
   SUPPORTED_CURRENCIES,
 } from "@/lib/constants";
 import { ui } from "@/lib/ui";
+import { AssetSearch, type AssetSearchSelection } from "./asset-search";
 
 type WalletOption = {
   id: string;
@@ -89,7 +90,11 @@ function TransactionFormBody({
   const defaultAssetSelection =
     transaction?.assetId ?? (assets.length > 0 ? assets[0].id : NEW_ASSET);
   const [assetSelection, setAssetSelection] = useState(defaultAssetSelection);
+  const [newAssetName, setNewAssetName] = useState("");
+  const [newAssetSymbol, setNewAssetSymbol] = useState("");
   const [newAssetType, setNewAssetType] = useState("STOCK");
+  const [newAssetQuoteCurrency, setNewAssetQuoteCurrency] = useState("EUR");
+  const [newAssetExternalId, setNewAssetExternalId] = useState("");
 
   const isSell = txType === "SELL";
   const creatingAsset = !isSell && assetSelection === NEW_ASSET;
@@ -101,6 +106,16 @@ function TransactionFormBody({
     if (nextType === "SELL" && assetSelection === NEW_ASSET) {
       setAssetSelection(assets[0]?.id ?? "");
     }
+  }
+
+  function handleAssetSearchSelect(selection: AssetSearchSelection) {
+    setNewAssetName(selection.name);
+    setNewAssetSymbol(selection.symbol);
+    setNewAssetType(selection.type);
+    setNewAssetQuoteCurrency(selection.quoteCurrency);
+    setNewAssetExternalId(
+      selection.coingeckoId ?? selection.yahooSymbol ?? "",
+    );
   }
 
   return (
@@ -177,6 +192,18 @@ function TransactionFormBody({
           <legend className="px-1 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Nouvel asset
           </legend>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Rechercher
+            </span>
+            <AssetSearch onSelect={handleAssetSearchSelect} />
+            <span className="text-xs font-normal text-zinc-400">
+              Tape un nom : les champs ci-dessous se remplissent
+              automatiquement.
+            </span>
+          </div>
+
           <div className="flex flex-col gap-4 sm:flex-row">
             <label className={`${ui.label} flex-1`}>
               Nom
@@ -185,6 +212,8 @@ function TransactionFormBody({
                 type="text"
                 maxLength={80}
                 required={creatingAsset}
+                value={newAssetName}
+                onChange={(event) => setNewAssetName(event.target.value)}
                 placeholder="Ex. Apple, Bitcoin"
                 className={ui.input}
               />
@@ -196,6 +225,8 @@ function TransactionFormBody({
                 type="text"
                 maxLength={20}
                 required={creatingAsset}
+                value={newAssetSymbol}
+                onChange={(event) => setNewAssetSymbol(event.target.value)}
                 placeholder="AAPL, BTC"
                 className={`${ui.input} uppercase`}
               />
@@ -221,7 +252,10 @@ function TransactionFormBody({
               Devise cotation
               <select
                 name="assetQuoteCurrency"
-                defaultValue="EUR"
+                value={newAssetQuoteCurrency}
+                onChange={(event) =>
+                  setNewAssetQuoteCurrency(event.target.value)
+                }
                 className={ui.input}
               >
                 {SUPPORTED_CURRENCIES.map((currency) => (
@@ -238,12 +272,14 @@ function TransactionFormBody({
               name="assetExternalId"
               type="text"
               maxLength={120}
+              value={newAssetExternalId}
+              onChange={(event) => setNewAssetExternalId(event.target.value)}
               placeholder={isCryptoAsset ? "ex. bitcoin" : "ex. AAPL, CW8.PA"}
               className={ui.input}
             />
             <span className="text-xs font-normal text-zinc-400">
-              Permet de récupérer le prix en direct. Modifiable ensuite dans la
-              page Assets.
+              Rempli automatiquement par la recherche — sert à récupérer le
+              prix en direct.
             </span>
           </label>
         </fieldset>
