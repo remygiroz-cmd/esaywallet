@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
       type: wallet.type,
       currency: wallet.currency,
       taxRate: wallet.taxRate,
+      openedAt: wallet.openedAt,
     })),
     assets: assets.map((asset) => ({
       name: asset.name,

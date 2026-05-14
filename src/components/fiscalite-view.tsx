@@ -92,11 +92,12 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
       string,
       {
         name: string;
-        taxRate: number;
         realizedGain: number;
         count: number;
         income: number;
         incomeCount: number;
+        estimatedTax: number;
+        rates: Set<number>;
       }
     >();
     const perAsset = new Map<
@@ -106,16 +107,17 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
     let netRealized = 0;
     let totalIncome = 0;
 
-    const getWallet = (id: string, name: string, taxRate: number) => {
+    const getWallet = (id: string, name: string) => {
       const existing = perWallet.get(id);
       if (existing) return existing;
       const created = {
         name,
-        taxRate,
         realizedGain: 0,
         count: 0,
         income: 0,
         incomeCount: 0,
+        estimatedTax: 0,
+        rates: new Set<number>(),
       };
       perWallet.set(id, created);
       return created;
@@ -123,9 +125,12 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
 
     for (const sale of filtered) {
       netRealized += sale.realizedGain;
-      const wallet = getWallet(sale.walletId, sale.walletName, sale.taxRate);
+      const wallet = getWallet(sale.walletId, sale.walletName);
       wallet.realizedGain += sale.realizedGain;
       wallet.count += 1;
+      // Each sale is taxed at its own rate (PEA 5-year rule).
+      wallet.estimatedTax += Math.max(0, sale.realizedGain) * sale.taxRate;
+      wallet.rates.add(sale.taxRate);
 
       const asset = perAsset.get(sale.assetId) ?? {
         name: sale.assetName,
@@ -140,13 +145,11 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
 
     for (const entry of filteredIncome) {
       totalIncome += entry.net;
-      const wallet = getWallet(
-        entry.walletId,
-        entry.walletName,
-        entry.taxRate,
-      );
+      const wallet = getWallet(entry.walletId, entry.walletName);
       wallet.income += entry.net;
       wallet.incomeCount += 1;
+      wallet.estimatedTax += Math.max(0, entry.net) * entry.taxRate;
+      wallet.rates.add(entry.taxRate);
     }
 
     const wallets = [...perWallet.values()].sort(
@@ -157,20 +160,24 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
       (a, b) => b.realizedGain - a.realizedGain,
     );
 
-    // Carry-forward losses reduce each wallet's taxable gain, distributed
-    // proportionally to its positive realised gain. Income (dividends, etc.)
-    // is taxed separately at the wallet's rate, without carry-forward.
-    const totalPositive = wallets.reduce(
-      (sum, w) => sum + Math.max(0, w.realizedGain),
+    // Carry-forward losses reduce taxable gains, distributed proportionally
+    // across each positive-gain sale (taxed at its own rate). Income is taxed
+    // separately at its own rate, without carry-forward.
+    const totalPositiveGain = filtered.reduce(
+      (sum, sale) => sum + Math.max(0, sale.realizedGain),
       0,
     );
     let estimatedTax = 0;
-    for (const wallet of wallets) {
-      const positive = Math.max(0, wallet.realizedGain);
+    for (const sale of filtered) {
+      const positive = Math.max(0, sale.realizedGain);
       const share =
-        totalPositive > 0 ? carryForward * (positive / totalPositive) : 0;
-      estimatedTax += Math.max(0, wallet.realizedGain - share) * wallet.taxRate;
-      estimatedTax += Math.max(0, wallet.income) * wallet.taxRate;
+        totalPositiveGain > 0
+          ? carryForward * (positive / totalPositiveGain)
+          : 0;
+      estimatedTax += Math.max(0, sale.realizedGain - share) * sale.taxRate;
+    }
+    for (const entry of filteredIncome) {
+      estimatedTax += Math.max(0, entry.net) * entry.taxRate;
     }
 
     return {
@@ -379,7 +386,9 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
                       {wallet.count}
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
-                      {formatPercent(wallet.taxRate)}
+                      {wallet.rates.size === 1
+                        ? formatPercent([...wallet.rates][0])
+                        : "variable"}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <GainBadge
@@ -395,12 +404,7 @@ export function FiscaliteView({ sales, income, adjustments }: Props) {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
-                      {formatCurrency(
-                        (Math.max(0, wallet.realizedGain) +
-                          Math.max(0, wallet.income)) *
-                          wallet.taxRate,
-                        "EUR",
-                      )}
+                      {formatCurrency(wallet.estimatedTax, "EUR")}
                     </td>
                   </tr>
                 ))}

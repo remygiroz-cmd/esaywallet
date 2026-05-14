@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { loadPortfolio } from "@/lib/portfolio-server";
 import { getUserIncome } from "@/lib/income";
+import { taxRateForWalletAt } from "@/lib/constants";
 import { buildFxRateMap, convertCurrency } from "@/lib/currency";
 
 // A realised sale, with everything the tax view needs — amounts converted
@@ -44,15 +45,26 @@ export type FiscalData = {
 };
 
 export async function loadFiscalData(userId: string): Promise<FiscalData> {
-  const [portfolio, income, adjustments, fxRates] = await Promise.all([
-    loadPortfolio(userId),
-    getUserIncome(userId),
-    prisma.taxAdjustment.findMany({
-      where: { userId },
-      orderBy: { year: "desc" },
-    }),
-    prisma.fxRate.findMany({ where: { base: "EUR" } }),
-  ]);
+  const [portfolio, income, walletRows, adjustments, fxRates] =
+    await Promise.all([
+      loadPortfolio(userId),
+      getUserIncome(userId),
+      prisma.wallet.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          type: true,
+          taxRate: true,
+          openedAt: true,
+          currency: true,
+        },
+      }),
+      prisma.taxAdjustment.findMany({
+        where: { userId },
+        orderBy: { year: "desc" },
+      }),
+      prisma.fxRate.findMany({ where: { base: "EUR" } }),
+    ]);
 
   const fx = buildFxRateMap(
     fxRates.map((rate) => ({ quote: rate.quote, rate: rate.rate.toNumber() })),
@@ -61,11 +73,32 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
     convertCurrency(amount, from, "EUR", fx) ?? amount;
 
   const walletMeta = new Map(
-    portfolio.wallets.map((wallet) => [
-      wallet.walletId,
-      { type: wallet.type, taxRate: wallet.taxRate, currency: wallet.currency },
+    walletRows.map((wallet) => [
+      wallet.id,
+      {
+        type: wallet.type,
+        taxRate: wallet.taxRate,
+        openedAt: wallet.openedAt?.toISOString() ?? null,
+        currency: wallet.currency,
+      },
     ]),
   );
+
+  // The tax rate applying to a sale/income, on its own date (PEA 5-year rule).
+  const rateAt = (
+    meta:
+      | { type: string; taxRate: number | null; openedAt: string | null }
+      | undefined,
+    dateIso: string,
+  ): number =>
+    taxRateForWalletAt(
+      {
+        type: meta?.type ?? "OTHER",
+        taxRate: meta?.taxRate ?? null,
+        openedAt: meta?.openedAt ?? null,
+      },
+      dateIso,
+    );
 
   const sales: FiscalSale[] = [];
   for (const asset of portfolio.assets) {
@@ -81,7 +114,7 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
         walletId: sale.walletId,
         walletName: sale.walletName,
         walletType: meta?.type ?? "OTHER",
-        taxRate: meta?.taxRate ?? 0.3,
+        taxRate: rateAt(meta, sale.executedAt),
         quantity: sale.quantity,
         proceeds: toEur(sale.proceeds, currency),
         costOfSold: toEur(sale.costOfSold, currency),
@@ -104,7 +137,7 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
       walletId: entry.walletId,
       walletName: entry.wallet.name,
       walletType: meta?.type ?? "OTHER",
-      taxRate: meta?.taxRate ?? 0.3,
+      taxRate: rateAt(meta, entry.receivedAt.toISOString()),
       net: toEur(net, currency),
     };
   });

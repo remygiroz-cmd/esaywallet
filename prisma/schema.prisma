@@ -56,6 +56,8 @@ model Wallet {
   // Optional tax-rate override (ratio, e.g. 0.30). Falls back to the
   // type-based default when null.
   taxRate   Float?
+  // Account opening date — used for the PEA 5-year rule when estimating tax.
+  openedAt  DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

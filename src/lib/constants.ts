@@ -82,3 +82,32 @@ export const TAX_RATE_BY_WALLET_TYPE: Record<WalletType, number> = {
 export function taxRateForWalletType(type: string): number {
   return TAX_RATE_BY_WALLET_TYPE[type as WalletType] ?? 0.3;
 }
+
+// A PEA becomes income-tax exempt (social contributions only) after 5 years;
+// gains realised before that are taxed at the flat tax rate.
+export const PEA_MATURITY_YEARS = 5;
+const PEA_RATE_BEFORE_MATURITY = 0.3;
+const YEAR_MS = 365.25 * 24 * 3600 * 1000;
+
+// Tax rate applying to a gain/income realised at `dateIso`, taking into
+// account a manual override and — for a PEA — its opening date.
+export function taxRateForWalletAt(
+  wallet: { type: string; taxRate?: number | null; openedAt?: string | null },
+  dateIso: string,
+): number {
+  // A manual per-wallet override always wins.
+  if (wallet.taxRate != null) return wallet.taxRate;
+
+  if (wallet.type === "PEA" && wallet.openedAt) {
+    const opened = new Date(wallet.openedAt).getTime();
+    const date = new Date(dateIso).getTime();
+    if (Number.isFinite(opened) && Number.isFinite(date)) {
+      const years = (date - opened) / YEAR_MS;
+      return years < PEA_MATURITY_YEARS
+        ? PEA_RATE_BEFORE_MATURITY
+        : taxRateForWalletType("PEA");
+    }
+  }
+
+  return taxRateForWalletType(wallet.type);
+}

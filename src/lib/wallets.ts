@@ -7,6 +7,7 @@ export type WalletInput = {
   type: WalletType;
   currency: string;
   taxRate: number | null;
+  openedAt: Date | null;
 };
 
 export function getUserWallets(userId: string) {

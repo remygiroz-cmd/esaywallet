@@ -11,6 +11,7 @@ import {
   SUPPORTED_CURRENCIES,
   taxRateForWalletType,
 } from "@/lib/constants";
+import { toDateInputValue } from "@/lib/format";
 import { ui } from "@/lib/ui";
 
 const initialState: WalletFormState = {};
@@ -22,6 +23,7 @@ type WalletEditFormProps = {
     type: string;
     currency: string;
     taxRate: number | null;
+    openedAt: Date | null;
   };
 };
 
@@ -84,6 +86,22 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
       </div>
 
       <label className={ui.label}>
+        Date d&apos;ouverture du compte
+        <input
+          name="openedAt"
+          type="date"
+          defaultValue={
+            wallet.openedAt ? toDateInputValue(wallet.openedAt) : ""
+          }
+          className={ui.input}
+        />
+        <span className="text-xs font-normal text-zinc-400">
+          Pour un PEA, sert à appliquer automatiquement la règle des 5 ans
+          (30 % avant 5 ans, 17,2 % ensuite).
+        </span>
+      </label>
+
+      <label className={ui.label}>
         Taux d&apos;imposition des plus-values (%)
         <input
           name="taxRate"
@@ -96,8 +114,9 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
           className={ui.input}
         />
         <span className="text-xs font-normal text-zinc-400">
-          Laissez vide pour utiliser le taux par défaut du type de wallet.
-          Utile par exemple pour un PEA de moins de 5 ans.
+          Laissez vide pour utiliser le taux automatique (selon le type de
+          wallet et, pour un PEA, sa date d&apos;ouverture). Renseignez-le
+          pour forcer un taux précis.
         </span>
       </label>
 

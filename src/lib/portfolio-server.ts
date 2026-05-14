@@ -29,6 +29,7 @@ export async function loadPortfolioInput(
       type: wallet.type,
       currency: wallet.currency,
       taxRate: wallet.taxRate,
+      openedAt: wallet.openedAt?.toISOString() ?? null,
     })),
     assets: assets.map((asset) => ({
       id: asset.id,
