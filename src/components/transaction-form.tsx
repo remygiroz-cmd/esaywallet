@@ -37,6 +37,7 @@ type TransactionValues = {
   quantity: number;
   amountInvested: number;
   fees: number;
+  taxExempt: boolean;
   notes: string | null;
 };
 
@@ -356,6 +357,25 @@ function TransactionFormBody({
           />
         </label>
       </div>
+
+      {isSell ? (
+        <label className="flex items-start gap-2 rounded-lg border border-black/[.1] bg-zinc-50 p-3 text-sm dark:border-white/[.12] dark:bg-zinc-900/40">
+          <input
+            type="checkbox"
+            name="taxExempt"
+            defaultChecked={transaction?.taxExempt ?? false}
+            className="mt-0.5"
+          />
+          <span className="text-zinc-700 dark:text-zinc-300">
+            Vente non imposable
+            <span className="block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+              À cocher pour une conversion crypto↔crypto, un transfert entre
+              vos comptes, ou toute cession qui n&apos;est pas un événement
+              fiscal. Exclue de la base imposable dans la page Fiscalité.
+            </span>
+          </span>
+        </label>
+      ) : null}
 
       <label className={ui.label}>
         Note (optionnel)

@@ -47,6 +47,8 @@ export type PortfolioInput = {
     // For a BUY: amount invested. For a SELL: amount received (proceeds).
     amountInvested: number;
     fees: number;
+    // A SELL that is not a taxable disposal (crypto swap, transfer…).
+    taxExempt?: boolean;
   }[];
   prices: {
     assetId: string;
@@ -97,6 +99,8 @@ export type SaleComputation = {
   costOfSold: number; // wallet currency, PMP-based
   realizedGain: number; // wallet currency
   realizedGainPct: number;
+  // True when this sale is not a taxable disposal (crypto swap, transfer…).
+  taxExempt: boolean;
 };
 
 export type AssetComputation = {
@@ -405,6 +409,7 @@ function computePosition(
         costOfSold,
         realizedGain: saleGain,
         realizedGainPct: ratio(saleGain, costOfSold),
+        taxExempt: tx.taxExempt ?? false,
       });
       continue;
     }
@@ -522,14 +527,19 @@ function aggregateWallets(
 
     // Each sale is taxed at the rate applying on its own date — this matters
     // for a PEA, which becomes income-tax exempt after 5 years.
+    // PEA sales are internal moves: they are taxed on withdrawal, not here.
+    // Crypto-to-crypto swaps and transfers are flagged tax-exempt.
     const nowIso = new Date().toISOString();
     const taxRate = taxRateForWalletAt(wallet, nowIso);
     let estimatedTax = 0;
-    for (const position of walletPositions) {
-      for (const sale of position.sales) {
-        estimatedTax +=
-          Math.max(0, sale.realizedGain) *
-          taxRateForWalletAt(wallet, sale.executedAt);
+    if (wallet.type !== "PEA") {
+      for (const position of walletPositions) {
+        for (const sale of position.sales) {
+          if (sale.taxExempt) continue;
+          estimatedTax +=
+            Math.max(0, sale.realizedGain) *
+            taxRateForWalletAt(wallet, sale.executedAt);
+        }
       }
     }
 

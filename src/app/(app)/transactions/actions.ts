@@ -46,6 +46,8 @@ const txSchema = z.object({
     .number()
     .nonnegative("Le montant investi est invalide"),
   fees: z.coerce.number().nonnegative("Les frais sont invalides"),
+  // Checkbox: absent (null) → false, present ("on") → true.
+  taxExempt: z.coerce.boolean(),
   notes: z.string().trim().max(280),
 });
 
@@ -66,6 +68,7 @@ function parseTransaction(formData: FormData) {
     quantity: formData.get("quantity"),
     amountInvested: formData.get("amountInvested"),
     fees: formData.get("fees"),
+    taxExempt: formData.get("taxExempt"),
     notes: formData.get("notes") ?? "",
   });
 }
@@ -130,6 +133,8 @@ export async function createTransactionAction(
     quantity: parsed.data.quantity,
     amountInvested: parsed.data.amountInvested,
     fees: parsed.data.fees,
+    // Only a SELL can be a non-taxable disposal.
+    taxExempt: parsed.data.type === "SELL" && parsed.data.taxExempt,
     notes: parsed.data.notes.trim() || null,
   });
   if (!tx) return { error: "Wallet ou asset introuvable" };
@@ -169,6 +174,7 @@ export async function updateTransactionAction(
     quantity: parsed.data.quantity,
     amountInvested: parsed.data.amountInvested,
     fees: parsed.data.fees,
+    taxExempt: parsed.data.type === "SELL" && parsed.data.taxExempt,
     notes: parsed.data.notes.trim() || null,
   });
   if (!tx) return { error: "Transaction, wallet ou asset introuvable" };

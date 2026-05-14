@@ -73,6 +73,7 @@ export default async function TransactionDetailPage({
           quantity: transaction.quantity.toNumber(),
           amountInvested: transaction.amountInvested.toNumber(),
           fees: transaction.fees.toNumber(),
+          taxExempt: transaction.taxExempt,
           notes: transaction.notes,
         }}
       />
