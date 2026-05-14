@@ -14,7 +14,9 @@ import {
   createTransaction,
   updateTransaction,
   deleteTransaction,
+  createTransactionsBulk,
 } from "@/lib/transactions";
+import { parseTransactionRows } from "@/lib/import";
 
 export type TransactionFormState = {
   error?: string;
@@ -177,4 +179,54 @@ export async function deleteTransactionAction(
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
   redirect("/transactions");
+}
+
+export type ImportFormState = {
+  error?: string;
+  imported?: number;
+  submittedAt?: number;
+};
+
+export async function importTransactionsAction(
+  _prev: ImportFormState,
+  formData: FormData,
+): Promise<ImportFormState> {
+  const user = await requireUser();
+  const walletId = String(formData.get("walletId") ?? "");
+  const assetId = String(formData.get("assetId") ?? "");
+  const text = String(formData.get("data") ?? "");
+
+  if (!walletId || !assetId) {
+    return { error: "Sélectionnez un wallet et un asset." };
+  }
+
+  const { rows } = parseTransactionRows(text);
+  if (rows.length === 0) {
+    return {
+      error:
+        "Aucune ligne valide détectée. Vérifiez l'ordre des colonnes collées.",
+    };
+  }
+
+  const count = await createTransactionsBulk(
+    user.id,
+    walletId,
+    assetId,
+    rows.map((row) => ({
+      type: row.type,
+      executedAt: new Date(row.executedAt),
+      unitPrice: row.unitPrice,
+      quantity: row.quantity,
+      amountInvested: row.amountInvested,
+      fees: row.fees,
+    })),
+  );
+  if (count === null) {
+    return { error: "Wallet ou asset introuvable." };
+  }
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath(`/wallets/${walletId}`);
+  return { imported: count, submittedAt: Date.now() };
 }

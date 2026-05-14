@@ -25,12 +25,17 @@ export default async function TransactionsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className={ui.heading}>Transactions</h1>
-        <p className={`mt-1 ${ui.subtle}`}>
-          Enregistrez chaque achat : asset, date, prix, montant investi et
-          quantité reçue.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className={ui.heading}>Transactions</h1>
+          <p className={`mt-1 ${ui.subtle}`}>
+            Enregistrez chaque achat : asset, date, prix, montant investi et
+            quantité reçue.
+          </p>
+        </div>
+        <Link href="/transactions/import" className={ui.secondaryButton}>
+          Import en masse
+        </Link>
       </header>
 
       {wallets.length === 0 ? (
@@ -67,7 +72,7 @@ export default async function TransactionsPage() {
         </div>
       ) : (
         <div className={`${ui.card} overflow-x-auto p-0`}>
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
                 <th className="px-4 py-3 font-medium">Date</th>

@@ -30,7 +30,7 @@ export default async function AssetsPage() {
         </div>
       ) : (
         <div className={`${ui.card} overflow-x-auto p-0`}>
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
                 <th className="px-4 py-3 font-medium">Nom</th>

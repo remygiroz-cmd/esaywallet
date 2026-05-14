@@ -34,7 +34,7 @@ export default async function TransactionDetailPage({
         >
           ← Toutes les transactions
         </Link>
-        <div className="mt-2 flex items-start justify-between gap-4">
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className={ui.heading}>Modifier la transaction</h1>
             <p className={`mt-1 ${ui.subtle}`}>

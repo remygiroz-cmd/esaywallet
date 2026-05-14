@@ -47,7 +47,9 @@ export default async function AssetDetailPage({
           Suppression
         </h2>
         {asset._count.transactions === 0 ? (
-          <div className={`${ui.card} flex items-center justify-between gap-4`}>
+          <div
+            className={`${ui.card} flex flex-wrap items-center justify-between gap-3`}
+          >
             <p className={ui.subtle}>
               Cet asset n&apos;est utilisé par aucune transaction.
             </p>
