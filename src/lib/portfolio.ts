@@ -167,11 +167,49 @@ export type PortfolioComputation = {
   gainPct: number;
   realizedGain: number;
   estimatedTax: number;
+  // Money-weighted annualised return (XIRR), or null when undefined.
+  annualizedReturn: number | null;
   hasMissingPrice: boolean;
   wallets: WalletComputation[];
   assets: AssetComputation[];
   generatedAt: string;
 };
+
+// Money-weighted annualised return from dated cash flows (XIRR), solved by
+// bisection. Returns null when the cash flows don't bracket a solution.
+function xirr(flows: { t: number; amount: number }[]): number | null {
+  if (flows.length < 2) return null;
+  const t0 = Math.min(...flows.map((flow) => flow.t));
+  const YEAR_MS = 365.25 * 24 * 3600 * 1000;
+  const npv = (rate: number): number =>
+    flows.reduce(
+      (sum, flow) =>
+        sum + flow.amount / (1 + rate) ** ((flow.t - t0) / YEAR_MS),
+      0,
+    );
+
+  let low = -0.95;
+  let high = 50;
+  let npvLow = npv(low);
+  const npvHigh = npv(high);
+  if (!Number.isFinite(npvLow) || !Number.isFinite(npvHigh)) return null;
+  if (npvLow === 0) return low;
+  if (npvHigh === 0) return high;
+  if (npvLow * npvHigh > 0) return null;
+
+  for (let i = 0; i < 200; i += 1) {
+    const mid = (low + high) / 2;
+    const npvMid = npv(mid);
+    if (Math.abs(npvMid) < 1e-6 || high - low < 1e-10) return mid;
+    if (npvLow * npvMid < 0) {
+      high = mid;
+    } else {
+      low = mid;
+      npvLow = npvMid;
+    }
+  }
+  return (low + high) / 2;
+}
 
 type PositionComputation = {
   walletId: string;
@@ -259,10 +297,33 @@ export function computePortfolio(
     estimatedTax += toReference(wallet.estimatedTax, wallet.currency);
   }
 
+  // Money-weighted return: every buy/sell is a dated cash flow, and the
+  // current portfolio value is a final inflow as of now.
+  const cashFlows: { t: number; amount: number }[] = [];
+  for (const tx of input.transactions) {
+    const wallet = walletById.get(tx.walletId);
+    if (!wallet) continue;
+    const t = new Date(tx.executedAt).getTime();
+    if (Number.isNaN(t)) continue;
+    if (tx.type === "SELL") {
+      cashFlows.push({
+        t,
+        amount: toReference(tx.amountInvested - tx.fees, wallet.currency),
+      });
+    } else {
+      cashFlows.push({
+        t,
+        amount: -toReference(tx.amountInvested + tx.fees, wallet.currency),
+      });
+    }
+  }
+  cashFlows.push({ t: Date.now(), amount: currentValue });
+
   return {
     referenceCurrency,
     totalCost,
     currentValue,
+    annualizedReturn: xirr(cashFlows),
     gain,
     gainPct: ratio(gain, totalCost),
     realizedGain,

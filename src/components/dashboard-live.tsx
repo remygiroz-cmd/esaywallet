@@ -315,6 +315,22 @@ function GlobalSummary({ portfolio }: { portfolio: PortfolioComputation }) {
             Total investi
           </p>
         </div>
+        {portfolio.annualizedReturn !== null ? (
+          <div>
+            <p
+              className={`text-base font-semibold tabular-nums ${
+                portfolio.annualizedReturn >= 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              {formatPercent(portfolio.annualizedReturn)}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              TRI annualisé
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );
