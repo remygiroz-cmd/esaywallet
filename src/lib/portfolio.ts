@@ -55,6 +55,8 @@ export type PortfolioInput = {
     fetchedAt: string;
   }[];
   fxRates: { quote: string; rate: number }[];
+  // Uninvested cash balance per wallet, in the wallet's own currency.
+  cashByWallet?: Record<string, number>;
 };
 
 // One BUY transaction, valued at the current price as if still fully held.
@@ -141,8 +143,10 @@ export type WalletComputation = {
   type: string;
   currency: string;
   totalCost: number; // wallet currency, open position
-  currentValue: number; // wallet currency
-  currentValueReference: number; // reference currency
+  currentValue: number; // wallet currency, holdings only
+  currentValueReference: number; // reference currency, holdings only
+  cashBalance: number; // wallet currency, uninvested cash
+  totalValue: number; // wallet currency, holdings + cash
   gain: number; // wallet currency, unrealised
   gainPct: number;
   realizedGain: number; // wallet currency
@@ -162,7 +166,9 @@ export type PortfolioSnapshotPoint = {
 export type PortfolioComputation = {
   referenceCurrency: string;
   totalCost: number;
-  currentValue: number;
+  currentValue: number; // holdings only
+  cashBalance: number; // uninvested cash across all wallets
+  totalValue: number; // holdings + cash
   gain: number; // unrealised
   gainPct: number;
   realizedGain: number;
@@ -260,7 +266,12 @@ export function computePortfolio(
     );
   }
 
-  const wallets = aggregateWallets(input.wallets, positions, toReference);
+  const wallets = aggregateWallets(
+    input.wallets,
+    positions,
+    toReference,
+    input.cashByWallet ?? {},
+  );
   const assets = aggregateAssets(
     input.assets,
     positions,
@@ -293,8 +304,10 @@ export function computePortfolio(
   const gain = currentValue - totalCost;
 
   let estimatedTax = 0;
+  let cashBalance = 0;
   for (const wallet of wallets) {
     estimatedTax += toReference(wallet.estimatedTax, wallet.currency);
+    cashBalance += toReference(wallet.cashBalance, wallet.currency);
   }
 
   // Money-weighted return: every buy/sell is a dated cash flow, and the
@@ -323,6 +336,8 @@ export function computePortfolio(
     referenceCurrency,
     totalCost,
     currentValue,
+    cashBalance,
+    totalValue: currentValue + cashBalance,
     annualizedReturn: xirr(cashFlows),
     gain,
     gainPct: ratio(gain, totalCost),
@@ -455,6 +470,7 @@ function aggregateWallets(
   wallets: PortfolioInput["wallets"],
   positions: PositionComputation[],
   toReference: (amount: number, from: string) => number,
+  cashByWallet: Record<string, number>,
 ): WalletComputation[] {
   return wallets.map((wallet) => {
     const walletPositions = positions.filter(
@@ -503,6 +519,7 @@ function aggregateWallets(
     const gain = currentValue - totalCost;
     const taxRate =
       wallet.taxRate ?? taxRateForWalletType(wallet.type);
+    const cashBalance = cashByWallet[wallet.id] ?? 0;
     return {
       walletId: wallet.id,
       name: wallet.name,
@@ -511,6 +528,8 @@ function aggregateWallets(
       totalCost,
       currentValue,
       currentValueReference: toReference(currentValue, wallet.currency),
+      cashBalance,
+      totalValue: currentValue + cashBalance,
       gain,
       gainPct: ratio(gain, totalCost),
       realizedGain,

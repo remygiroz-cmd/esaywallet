@@ -3,15 +3,23 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth-server";
 import { getWallet } from "@/lib/wallets";
 import { getWalletTransactions } from "@/lib/transactions";
-import { WALLET_TYPE_LABELS, type WalletType } from "@/lib/constants";
+import { getWalletCashMovements, getCashByWallet } from "@/lib/cash";
+import {
+  WALLET_TYPE_LABELS,
+  type WalletType,
+  CASH_MOVEMENT_KIND_LABELS,
+  type CashMovementKind,
+} from "@/lib/constants";
 import { ui } from "@/lib/ui";
+import { formatCurrency, formatDate, toDateInputValue } from "@/lib/format";
 import { WalletEditForm } from "@/components/wallet-edit-form";
+import { CashMovementForm } from "@/components/cash-movement-form";
 import {
   TransactionTable,
   type TransactionRow,
 } from "@/components/transaction-table";
 import { DeleteButton } from "@/components/delete-button";
-import { deleteWalletAction } from "../actions";
+import { deleteWalletAction, deleteCashMovementAction } from "../actions";
 
 export default async function WalletDetailPage({
   params,
@@ -24,7 +32,13 @@ export default async function WalletDetailPage({
 
   if (!wallet) notFound();
 
-  const transactions = await getWalletTransactions(wallet.id, user.id);
+  const [transactions, cashMovements, cashByWallet] = await Promise.all([
+    getWalletTransactions(wallet.id, user.id),
+    getWalletCashMovements(wallet.id, user.id),
+    getCashByWallet(user.id),
+  ]);
+  const cashBalance = cashByWallet.get(wallet.id) ?? 0;
+
   const rows: TransactionRow[] = transactions.map((tx) => ({
     id: tx.id,
     executedAt: tx.executedAt.toISOString(),
@@ -70,6 +84,112 @@ export default async function WalletDetailPage({
           Paramètres
         </h2>
         <WalletEditForm wallet={wallet} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Espèces
+        </h2>
+        <div className={`${ui.card} flex flex-wrap items-end gap-x-10 gap-y-2`}>
+          <div>
+            <p
+              className={`text-2xl font-semibold tabular-nums ${
+                cashBalance < 0
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-black dark:text-zinc-50"
+              }`}
+            >
+              {formatCurrency(cashBalance, wallet.currency)}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Solde de liquidités
+            </p>
+          </div>
+          <p className="text-xs text-zinc-400">
+            Dépôts − retraits − achats + ventes + revenus. Un solde négatif
+            signifie qu&apos;il manque des dépôts à enregistrer.
+          </p>
+        </div>
+
+        <CashMovementForm
+          walletId={wallet.id}
+          currency={wallet.currency}
+          defaultDate={toDateInputValue(new Date())}
+        />
+
+        {cashMovements.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-black/[.15] bg-white p-6 text-center text-sm text-zinc-500 dark:border-white/[.15] dark:bg-zinc-950 dark:text-zinc-400">
+            Aucun dépôt ni retrait enregistré.
+          </div>
+        ) : (
+          <div className={`${ui.card} overflow-x-auto p-0`}>
+            <table className="w-full min-w-[34rem] text-sm">
+              <thead>
+                <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
+                  <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Note</th>
+                  <th className="px-4 py-3 text-right font-medium">Montant</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {cashMovements.map((movement) => {
+                  const amount = movement.amount.toNumber();
+                  const isDeposit = movement.kind === "DEPOSIT";
+                  return (
+                    <tr
+                      key={movement.id}
+                      className="border-b border-black/[.05] last:border-0 dark:border-white/[.06]"
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                        {formatDate(movement.occurredAt)}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
+                        {CASH_MOVEMENT_KIND_LABELS[
+                          movement.kind as CashMovementKind
+                        ] ?? movement.kind}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">
+                        {movement.note ?? "—"}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right font-medium tabular-nums ${
+                          isDeposit
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {isDeposit ? "+" : "−"}
+                        {formatCurrency(amount, wallet.currency)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <form action={deleteCashMovementAction}>
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={movement.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="walletId"
+                            value={wallet.id}
+                          />
+                          <button
+                            type="submit"
+                            className={ui.dangerButton}
+                          >
+                            Suppr.
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">

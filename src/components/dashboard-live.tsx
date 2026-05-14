@@ -335,6 +335,26 @@ function GlobalSummary({ portfolio }: { portfolio: PortfolioComputation }) {
             Total investi
           </p>
         </div>
+        {portfolio.cashBalance !== 0 ? (
+          <>
+            <div>
+              <p className="text-base font-medium text-zinc-600 tabular-nums dark:text-zinc-300">
+                {formatCurrency(portfolio.cashBalance, currency)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                Espèces disponibles
+              </p>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-black tabular-nums dark:text-zinc-50">
+                {formatCurrency(portfolio.totalValue, currency)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                Patrimoine total (titres + espèces)
+              </p>
+            </div>
+          </>
+        ) : null}
         {portfolio.annualizedReturn !== null ? (
           <div>
             <p

@@ -59,11 +59,28 @@ model Wallet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transactions Transaction[]
-  income       Income[]
-  snapshots    PortfolioSnapshot[]
+  transactions  Transaction[]
+  income        Income[]
+  cashMovements CashMovement[]
+  snapshots     PortfolioSnapshot[]
 
   @@index([userId])
+}
+
+// A cash deposit into or withdrawal from a wallet, in the wallet currency.
+// Combined with buys, sells and income, it gives the wallet's cash balance.
+model CashMovement {
+  id         String   @id @default(cuid())
+  walletId   String
+  wallet     Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  kind       String // DEPOSIT | WITHDRAWAL
+  amount     Decimal // always positive, in the wallet currency
+  occurredAt DateTime
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([walletId])
 }
 
 model Asset {
