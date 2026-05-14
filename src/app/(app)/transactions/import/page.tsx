@@ -8,6 +8,7 @@ import { MultiImport } from "@/components/multi-import";
 import { CmcImport } from "@/components/cmc-import";
 import { BitstackImport } from "@/components/bitstack-import";
 import { BinanceImport } from "@/components/binance-import";
+import { CryptoComImport } from "@/components/cryptocom-import";
 import { TrImport } from "@/components/tr-import";
 import { TransactionImport } from "@/components/transaction-import";
 import { RealizedGainImport } from "@/components/realized-gain-import";
@@ -130,6 +131,18 @@ export default async function TransactionImportPage() {
               échanges contre euro ou stablecoin sont importés.
             </p>
             <BinanceImport wallets={walletOptions} />
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Raccourci Crypto.com
+            </h2>
+            <p className={ui.subtle}>
+              Pré-configuré pour l&apos;export des transactions de
+              l&apos;app Crypto.com. Chaque ligne porte sa valeur en euros :
+              achats, récompenses et échanges crypto↔crypto sont importés.
+            </p>
+            <CryptoComImport wallets={walletOptions} />
           </section>
 
           <section className="flex flex-col gap-3">
