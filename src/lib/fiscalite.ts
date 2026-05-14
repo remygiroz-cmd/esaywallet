@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { loadPortfolio } from "@/lib/portfolio-server";
 import { getUserIncome } from "@/lib/income";
+import { getUserRealizedGainEntries } from "@/lib/realized-gains";
 import { taxRateForWalletAt, PEA_MATURITY_YEARS } from "@/lib/constants";
 import { buildFxRateMap, convertCurrency } from "@/lib/currency";
 
@@ -28,6 +29,9 @@ export type FiscalSale = {
   // transfer is flagged tax-exempt on the transaction.
   taxable: boolean;
   taxExempt: boolean;
+  // True when this line comes from an imported bank realised-gains
+  // statement rather than reconstructed from transactions.
+  fromStatement: boolean;
 };
 
 // A received income entry (dividend, coupon, staking, interest), converted
@@ -69,10 +73,18 @@ export type FiscalData = {
 };
 
 export async function loadFiscalData(userId: string): Promise<FiscalData> {
-  const [portfolio, income, walletRows, peaWithdrawals, adjustments, fxRates] =
-    await Promise.all([
+  const [
+    portfolio,
+    income,
+    realizedEntries,
+    walletRows,
+    peaWithdrawals,
+    adjustments,
+    fxRates,
+  ] = await Promise.all([
       loadPortfolio(userId),
       getUserIncome(userId),
+      getUserRealizedGainEntries(userId),
       prisma.wallet.findMany({
         where: { userId },
         select: {
@@ -158,9 +170,44 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
         realizedGain: toEur(sale.realizedGain, currency),
         taxable,
         taxExempt: sale.taxExempt,
+        fromStatement: false,
       });
     }
   }
+
+  // Imported bank statements: the realised gain is already computed, so
+  // each line becomes an authoritative sale dated at the tax year-end.
+  for (const entry of realizedEntries) {
+    const meta = entry.walletId
+      ? walletMeta.get(entry.walletId)
+      : undefined;
+    const walletType = meta?.type ?? "CTO";
+    // Mid-year, noon UTC — keeps the entry firmly inside its tax year
+    // whatever the viewer's timezone.
+    const executedAt = `${entry.year}-06-30T12:00:00.000Z`;
+    const realizedGain = entry.realizedGain.toNumber();
+    const proceeds = entry.proceeds.toNumber();
+    sales.push({
+      transactionId: `statement-${entry.id}`,
+      executedAt,
+      assetId: `statement-${entry.id}`,
+      assetName: entry.securityName,
+      assetSymbol: entry.securityCode ?? "",
+      walletId: entry.walletId ?? "statement",
+      walletName: entry.wallet?.name ?? "Relevé importé",
+      walletType,
+      taxRate: rateAt(meta, executedAt),
+      quantity: 0,
+      proceeds,
+      costOfSold: proceeds - realizedGain,
+      realizedGain,
+      // A bank realised-gains statement is for a taxable account.
+      taxable: walletType !== "PEA",
+      taxExempt: false,
+      fromStatement: true,
+    });
+  }
+
   sales.sort((a, b) => (a.executedAt < b.executedAt ? 1 : -1));
 
   const incomeRows: FiscalIncome[] = income.map((entry) => {

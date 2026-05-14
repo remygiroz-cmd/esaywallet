@@ -25,11 +25,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  wallets        Wallet[]
-  assets         Asset[]
-  snapshots      PortfolioSnapshot[]
-  taxAdjustments TaxAdjustment[]
-  priceAlerts    PriceAlert[]
+  wallets            Wallet[]
+  assets             Asset[]
+  snapshots          PortfolioSnapshot[]
+  taxAdjustments     TaxAdjustment[]
+  priceAlerts        PriceAlert[]
+  realizedGainEntries RealizedGainEntry[]
 }
 
 // User-entered figures the app can't derive — currently the
@@ -61,12 +62,36 @@ model Wallet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transactions  Transaction[]
-  income        Income[]
-  cashMovements CashMovement[]
-  snapshots     PortfolioSnapshot[]
+  transactions       Transaction[]
+  income             Income[]
+  cashMovements      CashMovement[]
+  snapshots          PortfolioSnapshot[]
+  realizedGainEntries RealizedGainEntry[]
 
   @@index([userId])
+}
+
+// A pre-computed realised gain/loss line from a bank's tax statement
+// (e.g. a Boursorama CTO "imprimé fiscal unique"). The bank has already
+// done the cost-basis maths, so this is imported as an authoritative
+// figure rather than reconstructed from transactions.
+model RealizedGainEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId     String?
+  wallet       Wallet?  @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  year         Int
+  securityName String
+  securityCode String? // ISIN, when provided
+  proceeds     Decimal  @default(0) // total disposals (cessions)
+  realizedGain Decimal // +/- value réalisée
+  source       String? // file name / bank label
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([walletId])
 }
 
 // A cash deposit into or withdrawal from a wallet, in the wallet currency.
