@@ -107,8 +107,22 @@ export type AssetComputation = {
   dailyChangePct: number | null; // ratio, e.g. 0.025 = +2.5% over 24h
   hasMissingPrice: boolean;
   hasSales: boolean;
+  walletIds: string[]; // wallets where this asset is still held
   lots: LotComputation[];
   sales: SaleComputation[];
+};
+
+// A single asset's open position inside one wallet (wallet currency).
+export type WalletAssetLine = {
+  assetId: string;
+  name: string;
+  symbol: string;
+  type: string;
+  quantity: number;
+  currentValue: number;
+  gain: number;
+  gainPct: number;
+  hasMissingPrice: boolean;
 };
 
 export type WalletComputation = {
@@ -123,6 +137,7 @@ export type WalletComputation = {
   realizedGain: number; // wallet currency
   estimatedTax: number; // wallet currency, indicative
   hasMissingPrice: boolean;
+  assets: WalletAssetLine[];
   lots: LotComputation[];
 };
 
@@ -149,6 +164,9 @@ export type PortfolioComputation = {
 type PositionComputation = {
   walletId: string;
   assetId: string;
+  assetName: string;
+  assetSymbol: string;
+  assetType: string;
   walletCurrency: string;
   openQuantity: number;
   openCostBasis: number; // wallet currency
@@ -342,6 +360,9 @@ function computePosition(
   return {
     walletId: wallet.id,
     assetId: asset.id,
+    assetName: asset.name,
+    assetSymbol: asset.symbol,
+    assetType: asset.type,
     walletCurrency: wallet.currency,
     openQuantity: quantity,
     openCostBasis: costBasis,
@@ -368,18 +389,38 @@ function aggregateWallets(
     let realizedGain = 0;
     let hasMissingPrice = false;
     const lots: LotComputation[] = [];
+    const assets: WalletAssetLine[] = [];
 
     for (const position of walletPositions) {
       totalCost += position.openCostBasis;
       realizedGain += position.realizedGain;
       lots.push(...position.lots);
-      if (position.currentValue === null) {
-        hasMissingPrice = true;
-        currentValue += position.openCostBasis;
-      } else {
-        currentValue += position.currentValue;
+
+      const positionValue =
+        position.currentValue === null
+          ? position.openCostBasis
+          : position.currentValue;
+      if (position.currentValue === null) hasMissingPrice = true;
+      currentValue += positionValue;
+
+      // One line per asset still held in this wallet.
+      if (position.openQuantity > 0) {
+        const positionGain = positionValue - position.openCostBasis;
+        assets.push({
+          assetId: position.assetId,
+          name: position.assetName,
+          symbol: position.assetSymbol,
+          type: position.assetType,
+          quantity: position.openQuantity,
+          currentValue: positionValue,
+          gain: positionGain,
+          gainPct: ratio(positionGain, position.openCostBasis),
+          hasMissingPrice: position.currentValue === null,
+        });
       }
     }
+
+    assets.sort((a, b) => b.currentValue - a.currentValue);
 
     const gain = currentValue - totalCost;
     return {
@@ -395,6 +436,7 @@ function aggregateWallets(
       estimatedTax:
         Math.max(0, realizedGain) * taxRateForWalletType(wallet.type),
       hasMissingPrice,
+      assets,
       lots,
     };
   });
@@ -450,6 +492,13 @@ function aggregateAssets(
 
       const gain = currentValue - totalCost;
       const price = priceByAsset.get(asset.id) ?? null;
+      const walletIds = [
+        ...new Set(
+          assetPositions
+            .filter((position) => position.openQuantity > 0)
+            .map((position) => position.walletId),
+        ),
+      ];
 
       return {
         assetId: asset.id,
@@ -476,6 +525,7 @@ function aggregateAssets(
           price && price.change24h !== null ? price.change24h / 100 : null,
         hasMissingPrice,
         hasSales,
+        walletIds,
         lots: lots.sort((a, b) =>
           a.executedAt < b.executedAt ? 1 : -1,
         ),

@@ -5,15 +5,13 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   PortfolioComputation,
-  WalletComputation,
   AssetComputation,
   SaleComputation,
   PortfolioSnapshotPoint,
 } from "@/lib/portfolio";
 import {
-  WALLET_TYPE_LABELS,
+  ASSET_TYPES,
   ASSET_TYPE_LABELS,
-  type WalletType,
   type AssetType,
 } from "@/lib/constants";
 import {
@@ -28,6 +26,7 @@ import { ui } from "@/lib/ui";
 import { GainBadge } from "./gain-badge";
 import { PortfolioChart } from "./portfolio-chart";
 import { AssetPriceChart } from "./asset-price-chart";
+import { WalletSection } from "./wallet-section";
 
 type DashboardResponse = {
   portfolio: PortfolioComputation;
@@ -140,34 +139,98 @@ export function DashboardLive({
             />
           </section>
 
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Par wallet
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {portfolio.wallets.map((wallet) => (
-                <WalletCard key={wallet.walletId} wallet={wallet} />
-              ))}
-            </div>
-          </section>
+          <WalletSection
+            wallets={portfolio.wallets}
+            onMoved={() => refetch()}
+          />
 
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Par asset
-            </h2>
-            <div className="flex flex-col gap-2">
-              {portfolio.assets.map((asset) => (
-                <AssetRow
-                  key={asset.assetId}
-                  asset={asset}
-                  referenceCurrency={portfolio.referenceCurrency}
-                />
-              ))}
-            </div>
-          </section>
+          <AssetSection
+            assets={portfolio.assets}
+            wallets={portfolio.wallets.map((wallet) => ({
+              walletId: wallet.walletId,
+              name: wallet.name,
+            }))}
+            referenceCurrency={portfolio.referenceCurrency}
+          />
         </>
       )}
     </div>
+  );
+}
+
+function AssetSection({
+  assets,
+  wallets,
+  referenceCurrency,
+}: {
+  assets: AssetComputation[];
+  wallets: { walletId: string; name: string }[];
+  referenceCurrency: string;
+}) {
+  const [walletFilter, setWalletFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+
+  const filtered = assets.filter(
+    (asset) =>
+      (walletFilter === "" || asset.walletIds.includes(walletFilter)) &&
+      (typeFilter === "" || asset.type === typeFilter),
+  );
+
+  const filterSelectClass =
+    "rounded-lg border border-black/[.12] bg-white px-2 py-1 text-xs text-zinc-600 dark:border-white/[.16] dark:bg-black dark:text-zinc-300";
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Par asset
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <select
+            aria-label="Filtrer par wallet"
+            value={walletFilter}
+            onChange={(event) => setWalletFilter(event.target.value)}
+            className={filterSelectClass}
+          >
+            <option value="">Tous les wallets</option>
+            {wallets.map((wallet) => (
+              <option key={wallet.walletId} value={wallet.walletId}>
+                {wallet.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filtrer par type"
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+            className={filterSelectClass}
+          >
+            <option value="">Tous les types</option>
+            {ASSET_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {ASSET_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-black/[.15] bg-white p-6 text-center text-sm text-zinc-500 dark:border-white/[.15] dark:bg-zinc-950 dark:text-zinc-400">
+          Aucun asset pour ce filtre.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {filtered.map((asset) => (
+            <AssetRow
+              key={asset.assetId}
+              asset={asset}
+              referenceCurrency={referenceCurrency}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -266,53 +329,6 @@ function RealizedSummary({ portfolio }: { portfolio: PortfolioComputation }) {
         fiscalité réelle dépend de votre situation et de la durée de
         détention.
       </p>
-    </div>
-  );
-}
-
-function WalletCard({ wallet }: { wallet: WalletComputation }) {
-  return (
-    <div className={`${ui.card} flex flex-col gap-3`}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <Link
-            href={`/wallets/${wallet.walletId}`}
-            className="font-semibold text-black hover:text-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-400"
-          >
-            {wallet.name}
-          </Link>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            {WALLET_TYPE_LABELS[wallet.type as WalletType] ?? wallet.type}
-          </p>
-        </div>
-        <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-          {wallet.currency}
-        </span>
-      </div>
-      <div>
-        <p className="text-xl font-semibold text-black tabular-nums dark:text-zinc-50">
-          {formatCurrency(wallet.currentValue, wallet.currency)}
-        </p>
-        <div className="mt-1">
-          <GainBadge
-            gain={wallet.gain}
-            gainPct={wallet.gainPct}
-            currency={wallet.currency}
-            size="sm"
-          />
-        </div>
-      </div>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Investi : {formatCurrency(wallet.totalCost, wallet.currency)}
-      </p>
-      {wallet.realizedGain !== 0 ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Réalisé : {formatSignedCurrency(wallet.realizedGain, wallet.currency)}
-          {wallet.estimatedTax > 0
-            ? ` · impôt estimé ${formatCurrency(wallet.estimatedTax, wallet.currency)}`
-            : ""}
-        </p>
-      ) : null}
     </div>
   );
 }
