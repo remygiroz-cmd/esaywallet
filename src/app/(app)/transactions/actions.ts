@@ -21,6 +21,7 @@ import {
 } from "@/lib/transactions";
 import { parseTransactionRows } from "@/lib/import";
 import { parseCmcCsv } from "@/lib/import-cmc";
+import { parseBitstackCsv } from "@/lib/import-bitstack";
 import { parseTrCsv } from "@/lib/import-tr";
 import type { ImportPayloadRow } from "@/lib/import-multi";
 import {
@@ -321,6 +322,88 @@ export async function importCmcAction(
   const text = String(formData.get("data") ?? "");
 
   const { rows } = parseCmcCsv(text);
+  if (rows.length === 0) {
+    return {
+      error: "Aucune transaction valide trouvée dans le fichier.",
+    };
+  }
+
+  const tokens = [...new Set(rows.map((row) => row.token))];
+
+  // One destination wallet per token, assigned in the review step.
+  const walletByToken = new Map<string, string>();
+  for (const token of tokens) {
+    const walletId = String(formData.get(`wallet_${token}`) ?? "");
+    if (!walletId) {
+      return { error: `Sélectionnez un wallet pour ${token}.` };
+    }
+    walletByToken.set(token, walletId);
+  }
+
+  const resolutions = await Promise.allSettled(
+    tokens.map((token) => resolveCoingeckoId(token)),
+  );
+  const resolvedByToken = new Map<string, { id: string; name: string }>();
+  tokens.forEach((token, index) => {
+    const result = resolutions[index];
+    if (result.status === "fulfilled" && result.value) {
+      resolvedByToken.set(token, result.value);
+    }
+  });
+
+  const assetIdByToken = new Map<string, string>();
+  for (const token of tokens) {
+    const resolved = resolvedByToken.get(token);
+    const asset = await upsertAsset(user.id, {
+      symbol: token,
+      name: resolved?.name ?? token,
+      type: "CRYPTO",
+      quoteCurrency: "EUR",
+      coingeckoId: resolved?.id ?? null,
+      yahooSymbol: null,
+    });
+    assetIdByToken.set(token, asset.id);
+  }
+
+  const count = await createBulkTransactions(
+    user.id,
+    rows.map((row) => ({
+      walletId: walletByToken.get(row.token) as string,
+      assetId: assetIdByToken.get(row.token) as string,
+      type: row.type,
+      executedAt: new Date(row.executedAt),
+      unitPrice: row.unitPrice,
+      quantity: row.quantity,
+      amountInvested: row.amountInvested,
+      fees: row.fees,
+    })),
+  );
+  if (count === null) return { error: "Wallet introuvable." };
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/assets");
+  revalidatePath("/wallets/[id]", "page");
+  return {
+    imported: count,
+    assetsCount: tokens.length,
+    resolvedCount: resolvedByToken.size,
+    submittedAt: Date.now(),
+  };
+}
+
+// Imports a Bitstack transaction-history CSV. Bitstack's "received /
+// sent" rows are normalised to buys and sells by the parser; every row
+// is crypto, so each token is routed to the wallet chosen for it and
+// resolved to a CoinGecko id for live prices.
+export async function importBitstackAction(
+  _prev: BulkImportState,
+  formData: FormData,
+): Promise<BulkImportState> {
+  const user = await requireUser();
+  const text = String(formData.get("data") ?? "");
+
+  const { rows } = parseBitstackCsv(text);
   if (rows.length === 0) {
     return {
       error: "Aucune transaction valide trouvée dans le fichier.",
