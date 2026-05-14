@@ -22,9 +22,12 @@ export default async function AppLayout({
               easyWallet
             </Link>
             <div className="flex items-center gap-3">
-              <span className="hidden max-w-[12rem] truncate text-sm text-zinc-500 sm:inline dark:text-zinc-400">
+              <Link
+                href="/parametres"
+                className="hidden max-w-[12rem] truncate text-sm text-zinc-500 transition-colors hover:text-emerald-600 sm:inline dark:text-zinc-400 dark:hover:text-emerald-400"
+              >
                 {user.name ?? user.email}
-              </span>
+              </Link>
               <form action={logoutAction}>
                 <button
                   type="submit"
