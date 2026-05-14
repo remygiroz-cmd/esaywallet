@@ -27,6 +27,7 @@ export type TrParseResult = {
   rows: TrRow[];
   skipped: number;
   isins: string[];
+  classes: ("STOCK" | "ETF")[];
 };
 
 function parseTrNumber(raw: string | undefined): number | null {
@@ -63,7 +64,9 @@ function columnIndex(header: string[], name: string): number {
 
 export function parseTrCsv(text: string): TrParseResult {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length < 2) return { rows: [], skipped: 0, isins: [] };
+  if (lines.length < 2) {
+    return { rows: [], skipped: 0, isins: [], classes: [] };
+  }
 
   const header = parseCsvLine(lines[0]);
   const idx = {
@@ -128,5 +131,8 @@ export function parseTrCsv(text: string): TrParseResult {
     });
   }
 
-  return { rows, skipped, isins: [...isinSet] };
+  const classes = [
+    ...new Set(rows.map((row) => row.assetType)),
+  ] as ("STOCK" | "ETF")[];
+  return { rows, skipped, isins: [...isinSet], classes };
 }
