@@ -6,6 +6,7 @@ import { getUserRealizedGainEntries } from "@/lib/realized-gains";
 import { ui } from "@/lib/ui";
 import { MultiImport } from "@/components/multi-import";
 import { CmcImport } from "@/components/cmc-import";
+import { BitstackImport } from "@/components/bitstack-import";
 import { TrImport } from "@/components/tr-import";
 import { TransactionImport } from "@/components/transaction-import";
 import { RealizedGainImport } from "@/components/realized-gain-import";
@@ -103,6 +104,18 @@ export default async function TransactionImportPage() {
               les assets sont des cryptos.
             </p>
             <CmcImport wallets={walletOptions} />
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Raccourci Bitstack
+            </h2>
+            <p className={ui.subtle}>
+              Pré-configuré pour l&apos;export Bitstack (format « Montant
+              reçu / Montant envoyé ») : chaque échange devient un achat ou
+              une vente. Les retraits crypto et dépôts en euros sont ignorés.
+            </p>
+            <BitstackImport wallets={walletOptions} />
           </section>
 
           <section className="flex flex-col gap-3">
