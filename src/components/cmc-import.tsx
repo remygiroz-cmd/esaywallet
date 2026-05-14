@@ -39,6 +39,7 @@ export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
   const [fileName, setFileName] = useState("");
 
   const preview = useMemo(() => (text ? parseCmcCsv(text) : null), [text]);
+  const cryptoDefault = defaultWalletId(wallets, ["CRYPTO"]);
 
   function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -84,22 +85,6 @@ export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
       <input type="hidden" name="data" value={text} />
 
       <label className={ui.label}>
-        Wallet pour les cryptos
-        <select
-          name="wallet_CRYPTO"
-          required
-          defaultValue={defaultWalletId(wallets, ["CRYPTO"])}
-          className={ui.input}
-        >
-          {wallets.map((wallet) => (
-            <option key={wallet.id} value={wallet.id}>
-              {wallet.name} ({wallet.currency})
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className={ui.label}>
         Fichier CoinMarketCap (.csv)
         <input
           type="file"
@@ -115,24 +100,56 @@ export function CmcImport({ wallets }: { wallets: WalletOption[] }) {
       </label>
 
       {preview ? (
-        <div className="rounded-lg border border-black/[.08] bg-zinc-50 p-3 text-sm dark:border-white/[.1] dark:bg-zinc-900">
-          <p className="font-medium text-zinc-700 dark:text-zinc-200">
-            {preview.rows.length} transaction
-            {preview.rows.length === 1 ? "" : "s"} · {preview.tokens.length}{" "}
-            asset{preview.tokens.length === 1 ? "" : "s"} détecté
-            {preview.tokens.length === 1 ? "" : "s"}
-            {preview.skipped > 0
-              ? ` · ${preview.skipped} ligne${
-                  preview.skipped === 1 ? "" : "s"
-                } ignorée${preview.skipped === 1 ? "" : "s"}`
-              : ""}
-          </p>
-          {preview.tokens.length > 0 ? (
-            <p className="mt-1 text-xs text-zinc-400">
-              {preview.tokens.join(", ")}
+        <>
+          <div className="rounded-lg border border-black/[.08] bg-zinc-50 p-3 text-sm dark:border-white/[.1] dark:bg-zinc-900">
+            <p className="font-medium text-zinc-700 dark:text-zinc-200">
+              {preview.rows.length} transaction
+              {preview.rows.length === 1 ? "" : "s"} · {preview.tokens.length}{" "}
+              asset{preview.tokens.length === 1 ? "" : "s"} détecté
+              {preview.tokens.length === 1 ? "" : "s"}
+              {preview.skipped > 0
+                ? ` · ${preview.skipped} ligne${
+                    preview.skipped === 1 ? "" : "s"
+                  } ignorée${preview.skipped === 1 ? "" : "s"}`
+                : ""}
             </p>
+          </div>
+
+          {preview.tokens.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Wallet de destination par asset
+              </p>
+              <div
+                key={`${fileName}:${preview.rows.length}`}
+                className="flex max-h-72 flex-col divide-y divide-black/[.06] overflow-y-auto rounded-lg border border-black/[.08] dark:divide-white/[.06] dark:border-white/[.1]"
+              >
+                {preview.tokens.map((token) => (
+                  <div
+                    key={token}
+                    className="flex items-center justify-between gap-3 px-3 py-2"
+                  >
+                    <span className="font-mono text-sm text-black dark:text-zinc-50">
+                      {token}
+                    </span>
+                    <select
+                      name={`wallet_${token}`}
+                      required
+                      defaultValue={cryptoDefault}
+                      className="rounded-md border border-black/[.12] bg-white px-2 py-1 text-xs text-zinc-600 dark:border-white/[.16] dark:bg-black dark:text-zinc-300"
+                    >
+                      {wallets.map((wallet) => (
+                        <option key={wallet.id} value={wallet.id}>
+                          {wallet.name} ({wallet.currency})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : null}
-        </div>
+        </>
       ) : null}
 
       {state.error ? <p className={ui.errorText}>{state.error}</p> : null}

@@ -18,11 +18,6 @@ type WalletOption = {
 
 const initialState: BulkImportState = {};
 
-const CLASS_LABELS: Record<string, string> = {
-  STOCK: "Wallet pour les actions",
-  ETF: "Wallet pour les ETF / fonds",
-};
-
 // Picks a sensible default wallet for an asset class, by wallet type.
 function defaultWalletId(
   wallets: WalletOption[],
@@ -118,9 +113,9 @@ export function TrImport({ wallets }: { wallets: WalletOption[] }) {
           <div className="rounded-lg border border-black/[.08] bg-zinc-50 p-3 text-sm dark:border-white/[.1] dark:bg-zinc-900">
             <p className="font-medium text-zinc-700 dark:text-zinc-200">
               {preview.rows.length} transaction
-              {preview.rows.length === 1 ? "" : "s"} · {preview.isins.length}{" "}
-              asset{preview.isins.length === 1 ? "" : "s"} détecté
-              {preview.isins.length === 1 ? "" : "s"}
+              {preview.rows.length === 1 ? "" : "s"} · {preview.assets.length}{" "}
+              asset{preview.assets.length === 1 ? "" : "s"} détecté
+              {preview.assets.length === 1 ? "" : "s"}
               {preview.skipped > 0
                 ? ` · ${preview.skipped} ligne${
                     preview.skipped === 1 ? "" : "s"
@@ -129,25 +124,47 @@ export function TrImport({ wallets }: { wallets: WalletOption[] }) {
             </p>
           </div>
 
-          {preview.classes.length > 0 ? (
-            <div className="flex flex-col gap-4 sm:flex-row">
-              {preview.classes.map((assetClass) => (
-                <label key={assetClass} className={`${ui.label} flex-1`}>
-                  {CLASS_LABELS[assetClass] ?? assetClass}
-                  <select
-                    name={`wallet_${assetClass}`}
-                    required
-                    defaultValue={defaultWalletForClass(wallets, assetClass)}
-                    className={ui.input}
+          {preview.assets.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Wallet de destination par asset
+              </p>
+              <div
+                key={`${fileName}:${preview.rows.length}`}
+                className="flex max-h-72 flex-col divide-y divide-black/[.06] overflow-y-auto rounded-lg border border-black/[.08] dark:divide-white/[.06] dark:border-white/[.1]"
+              >
+                {preview.assets.map((asset) => (
+                  <div
+                    key={asset.isin}
+                    className="flex items-center justify-between gap-3 px-3 py-2"
                   >
-                    {wallets.map((wallet) => (
-                      <option key={wallet.id} value={wallet.id}>
-                        {wallet.name} ({wallet.currency})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-black dark:text-zinc-50">
+                        {asset.name}
+                      </p>
+                      <p className="font-mono text-xs text-zinc-400">
+                        {asset.isin} ·{" "}
+                        {asset.assetType === "ETF" ? "ETF" : "Action"}
+                      </p>
+                    </div>
+                    <select
+                      name={`wallet_${asset.isin}`}
+                      required
+                      defaultValue={defaultWalletForClass(
+                        wallets,
+                        asset.assetType,
+                      )}
+                      className="shrink-0 rounded-md border border-black/[.12] bg-white px-2 py-1 text-xs text-zinc-600 dark:border-white/[.16] dark:bg-black dark:text-zinc-300"
+                    >
+                      {wallets.map((wallet) => (
+                        <option key={wallet.id} value={wallet.id}>
+                          {wallet.name} ({wallet.currency})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </>

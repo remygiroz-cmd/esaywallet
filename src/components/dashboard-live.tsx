@@ -69,6 +69,12 @@ export function DashboardLive({
   const { portfolio, history, refresh } = data as DashboardResponse;
   const hasTransactions = portfolio.assets.length > 0;
 
+  // The "focused" wallet: its card is expanded and the assets list below
+  // is filtered to it. null = no focus (everything shown).
+  const [selectedWalletId, setSelectedWalletId] = useState<string | null>(
+    null,
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -141,6 +147,8 @@ export function DashboardLive({
 
           <WalletSection
             wallets={portfolio.wallets}
+            selectedWalletId={selectedWalletId}
+            onSelectWallet={setSelectedWalletId}
             onMoved={() => refetch()}
           />
 
@@ -151,6 +159,8 @@ export function DashboardLive({
               name: wallet.name,
             }))}
             referenceCurrency={portfolio.referenceCurrency}
+            selectedWalletId={selectedWalletId}
+            onSelectWallet={setSelectedWalletId}
           />
         </>
       )}
@@ -162,19 +172,27 @@ function AssetSection({
   assets,
   wallets,
   referenceCurrency,
+  selectedWalletId,
+  onSelectWallet,
 }: {
   assets: AssetComputation[];
   wallets: { walletId: string; name: string }[];
   referenceCurrency: string;
+  selectedWalletId: string | null;
+  onSelectWallet: (walletId: string | null) => void;
 }) {
-  const [walletFilter, setWalletFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
-  const filtered = assets.filter(
-    (asset) =>
-      (walletFilter === "" || asset.walletIds.includes(walletFilter)) &&
-      (typeFilter === "" || asset.type === typeFilter),
-  );
+  const filtered = assets
+    .filter(
+      (asset) =>
+        (selectedWalletId === null ||
+          asset.walletIds.includes(selectedWalletId)) &&
+        (typeFilter === "" || asset.type === typeFilter),
+    )
+    // Best-performing assets first.
+    .slice()
+    .sort((a, b) => b.gainPct - a.gainPct);
 
   const filterSelectClass =
     "rounded-lg border border-black/[.12] bg-white px-2 py-1 text-xs text-zinc-600 dark:border-white/[.16] dark:bg-black dark:text-zinc-300";
@@ -188,8 +206,10 @@ function AssetSection({
         <div className="flex flex-wrap gap-2">
           <select
             aria-label="Filtrer par wallet"
-            value={walletFilter}
-            onChange={(event) => setWalletFilter(event.target.value)}
+            value={selectedWalletId ?? ""}
+            onChange={(event) =>
+              onSelectWallet(event.target.value || null)
+            }
             className={filterSelectClass}
           >
             <option value="">Tous les wallets</option>
@@ -362,6 +382,9 @@ function AssetRow({
               {ASSET_TYPE_LABELS[asset.type as AssetType] ?? asset.type} ·{" "}
               {formatQuantity(asset.totalQuantity)} unité
               {asset.totalQuantity > 1 ? "s" : ""}
+              {asset.avgBuyPrice > 0
+                ? ` · PRU ${formatCurrency(asset.avgBuyPrice, asset.quoteCurrency)}`
+                : ""}
             </p>
           </div>
         </div>
@@ -416,18 +439,25 @@ function AssetRow({
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
               Cours
             </p>
-            <AssetPriceChart assetId={asset.assetId} />
+            <AssetPriceChart
+              assetId={asset.assetId}
+              breakEven={asset.avgBuyPrice}
+              breakEvenCurrency={asset.quoteCurrency}
+            />
           </div>
           <div className="overflow-x-auto">
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
               Achats
             </p>
-            <table className="w-full min-w-[34rem] text-sm">
+            <table className="w-full min-w-[38rem] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-zinc-400">
                   <th className="py-2 font-medium">Date</th>
                   <th className="py-2 font-medium">Wallet</th>
                   <th className="py-2 text-right font-medium">Quantité</th>
+                  <th className="py-2 text-right font-medium">
+                    Prix d&apos;achat
+                  </th>
                   <th className="py-2 text-right font-medium">Investi</th>
                   <th className="py-2 text-right font-medium">Valeur</th>
                   <th className="py-2 text-right font-medium">+/- value</th>
@@ -447,6 +477,9 @@ function AssetRow({
                     </td>
                     <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
                       {formatQuantity(lot.quantity)}
+                    </td>
+                    <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
+                      {formatCurrency(lot.unitPrice, asset.quoteCurrency)}
                     </td>
                     <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
                       {formatCurrency(lot.costBasis, lot.walletCurrency)}
