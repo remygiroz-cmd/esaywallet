@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/revenus", label: "Revenus" },
   { href: "/alertes", label: "Alertes" },
   { href: "/fiscalite", label: "Fiscalité" },
+  { href: "/assistant-fiscal", label: "Assistant fiscal" },
   { href: "/verifications", label: "Vérifications" },
   { href: "/documents", label: "Documents" },
 ];
