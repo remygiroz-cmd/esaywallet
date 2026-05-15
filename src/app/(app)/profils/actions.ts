@@ -13,7 +13,6 @@ import {
   deleteProfile,
   renameProfile,
 } from "@/lib/profiles";
-import { prisma } from "@/lib/prisma";
 
 const nameSchema = z.string().trim().min(1, "Nom requis").max(60);
 
@@ -71,18 +70,3 @@ export async function deleteProfileAction(formData: FormData): Promise<void> {
   redirect("/profils");
 }
 
-// Switches the active profile. The select in the nav posts here.
-export async function switchProfileAction(formData: FormData): Promise<void> {
-  const user = await requireUser();
-  const id = String(formData.get("profileId") ?? "");
-  if (!id) redirect("/dashboard");
-  // Validate ownership before pinning the cookie.
-  const profile = await prisma.profile.findFirst({
-    where: { id, userId: user.id },
-    select: { id: true },
-  });
-  if (profile) await setActiveProfile(profile.id);
-  // Refresh the page the user was on.
-  const next = String(formData.get("next") ?? "/dashboard");
-  redirect(next);
-}
