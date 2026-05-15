@@ -533,9 +533,17 @@ function AssetRow({
               {ASSET_TYPE_LABELS[asset.type as AssetType] ?? asset.type} ·{" "}
               {formatQuantity(asset.totalQuantity)} unité
               {asset.totalQuantity > 1 ? "s" : ""}
-              {asset.avgCost > 0
-                ? ` · PRU ${formatCurrency(asset.avgCost, referenceCurrency)}`
-                : ""}
+              {asset.avgCost > 0 ? (
+                <>
+                  {" · PRU "}
+                  {asset.avgCostEur !== null
+                    ? formatCurrency(asset.avgCostEur, "EUR")
+                    : formatCurrency(asset.avgCost, referenceCurrency)}
+                  {asset.avgCostUsd !== null
+                    ? ` / ${formatCurrency(asset.avgCostUsd, "USD")}`
+                    : ""}
+                </>
+              ) : null}
             </p>
           </div>
         </div>

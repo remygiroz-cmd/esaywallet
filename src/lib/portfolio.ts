@@ -111,6 +111,8 @@ export type AssetComputation = {
   quoteCurrency: string;
   totalQuantity: number; // open quantity still held
   avgCost: number; // reference currency, per unit (PMP)
+  avgCostEur: number | null; // per unit, converted to EUR at the current FX
+  avgCostUsd: number | null; // per unit, converted to USD at the current FX
   totalCost: number; // reference currency, open position
   currentValue: number; // reference currency
   gain: number; // reference currency, unrealised
@@ -282,6 +284,7 @@ export function computePortfolio(
     priceByAsset,
     toReference,
     fx,
+    referenceCurrency,
   );
 
   let totalCost = 0;
@@ -570,6 +573,7 @@ function aggregateAssets(
   priceByAsset: Map<string, PortfolioInput["prices"][number]>,
   toReference: (amount: number, from: string) => number,
   fx: ReturnType<typeof buildFxRateMap>,
+  referenceCurrency: string,
 ): AssetComputation[] {
   return assets
     .map((asset) => {
@@ -622,6 +626,8 @@ function aggregateAssets(
         ),
       ];
 
+      const avgCost = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+
       return {
         assetId: asset.id,
         name: asset.name,
@@ -629,7 +635,15 @@ function aggregateAssets(
         type: asset.type,
         quoteCurrency: asset.quoteCurrency,
         totalQuantity,
-        avgCost: totalQuantity > 0 ? totalCost / totalQuantity : 0,
+        avgCost,
+        avgCostEur:
+          avgCost > 0
+            ? convertCurrency(avgCost, referenceCurrency, "EUR", fx)
+            : null,
+        avgCostUsd:
+          avgCost > 0
+            ? convertCurrency(avgCost, referenceCurrency, "USD", fx)
+            : null,
         totalCost,
         currentValue,
         gain,
