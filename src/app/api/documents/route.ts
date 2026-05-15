@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth-server";
+import { getCurrentSession } from "@/lib/auth-server";
 import {
   DOCUMENT_CATEGORIES,
   type DocumentCategory,
@@ -16,8 +16,9 @@ export const dynamic = "force-dynamic";
 // the (small) server-action body limit; the bytes are stored in the
 // database and only ever served back through GET /api/documents/[id].
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
-  if (!user) {
+  const session = await getCurrentSession();
+  const profile = session?.profile;
+  if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       .slice(0, 200) || null;
 
   const content = new Uint8Array(await file.arrayBuffer());
-  const doc = await createDocument(user.id, {
+  const doc = await createDocument(profile!.id, {
     name: file.name.slice(0, 200) || "document",
     mimeType,
     size: file.size,

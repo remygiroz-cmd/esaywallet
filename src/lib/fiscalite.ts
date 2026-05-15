@@ -1,8 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { loadPortfolio } from "@/lib/portfolio-server";
-import { getUserIncome } from "@/lib/income";
-import { getUserRealizedGainEntries } from "@/lib/realized-gains";
+import { getProfileIncome } from "@/lib/income";
+import { getProfileRealizedGainEntries } from "@/lib/realized-gains";
 import { taxRateForWalletAt, PEA_MATURITY_YEARS } from "@/lib/constants";
 import { buildFxRateMap, convertCurrency } from "@/lib/currency";
 
@@ -72,7 +72,7 @@ export type FiscalData = {
   adjustments: { year: number; carryForwardLoss: number }[];
 };
 
-export async function loadFiscalData(userId: string): Promise<FiscalData> {
+export async function loadFiscalData(profileId: string): Promise<FiscalData> {
   const [
     portfolio,
     income,
@@ -82,11 +82,11 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
     adjustments,
     fxRates,
   ] = await Promise.all([
-      loadPortfolio(userId),
-      getUserIncome(userId),
-      getUserRealizedGainEntries(userId),
+      loadPortfolio(profileId),
+      getProfileIncome(profileId),
+      getProfileRealizedGainEntries(profileId),
       prisma.wallet.findMany({
-        where: { userId },
+        where: { profileId },
         select: {
           id: true,
           type: true,
@@ -96,7 +96,7 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
         },
       }),
       prisma.cashMovement.findMany({
-        where: { kind: "WITHDRAWAL", wallet: { userId, type: "PEA" } },
+        where: { kind: "WITHDRAWAL", wallet: { profileId, type: "PEA" } },
         orderBy: { occurredAt: "desc" },
         include: {
           wallet: {
@@ -105,7 +105,7 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
         },
       }),
       prisma.taxAdjustment.findMany({
-        where: { userId },
+        where: { profileId },
         orderBy: { year: "desc" },
       }),
       prisma.fxRate.findMany({ where: { base: "EUR" } }),
@@ -263,13 +263,13 @@ export async function loadFiscalData(userId: string): Promise<FiscalData> {
 }
 
 export async function upsertTaxAdjustment(
-  userId: string,
+  profileId: string,
   year: number,
   carryForwardLoss: number,
 ): Promise<void> {
   await prisma.taxAdjustment.upsert({
-    where: { userId_year: { userId, year } },
-    create: { userId, year, carryForwardLoss },
+    where: { profileId_year: { profileId, year } },
+    create: { profileId, year, carryForwardLoss },
     update: { carryForwardLoss },
   });
 }

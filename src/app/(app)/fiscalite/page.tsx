@@ -1,11 +1,11 @@
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { loadFiscalData } from "@/lib/fiscalite";
 import { ui } from "@/lib/ui";
 import { FiscaliteView } from "@/components/fiscalite-view";
 
 export default async function FiscalitePage() {
-  const user = await requireUser();
-  const data = await loadFiscalData(user.id);
+  const { profile } = await requireProfile();
+  const data = await loadFiscalData(profile.id);
 
   return (
     <div className="flex flex-col gap-6">

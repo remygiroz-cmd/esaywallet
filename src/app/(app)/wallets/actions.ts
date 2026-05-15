@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import {
   WALLET_TYPES,
   SUPPORTED_CURRENCIES,
@@ -58,12 +58,12 @@ export async function createWalletAction(
   _prev: WalletFormState,
   formData: FormData,
 ): Promise<WalletFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const parsed = parseWallet(formData);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  await createWallet(user.id, {
+  await createWallet(profile.id, {
     name: parsed.data.name,
     type: parsed.data.type,
     currency: parsed.data.currency,
@@ -78,14 +78,14 @@ export async function updateWalletAction(
   _prev: WalletFormState,
   formData: FormData,
 ): Promise<WalletFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Wallet introuvable" };
   const parsed = parseWallet(formData);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  await updateWallet(id, user.id, {
+  await updateWallet(id, profile.id, {
     name: parsed.data.name,
     type: parsed.data.type,
     currency: parsed.data.currency,
@@ -100,10 +100,10 @@ export async function updateWalletAction(
 }
 
 export async function deleteWalletAction(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   if (id) {
-    await deleteWallet(id, user.id);
+    await deleteWallet(id, profile.id);
   }
   revalidatePath("/wallets");
   redirect("/wallets");
@@ -127,7 +127,7 @@ export async function createCashMovementAction(
   _prev: CashMovementFormState,
   formData: FormData,
 ): Promise<CashMovementFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const parsed = cashMovementSchema.safeParse({
     walletId: formData.get("walletId"),
     kind: formData.get("kind"),
@@ -139,7 +139,7 @@ export async function createCashMovementAction(
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
 
-  const movement = await createCashMovement(parsed.data.walletId, user.id, {
+  const movement = await createCashMovement(parsed.data.walletId, profile.id, {
     kind: parsed.data.kind,
     amount: parsed.data.amount,
     occurredAt: parsed.data.occurredAt,
@@ -155,10 +155,10 @@ export async function createCashMovementAction(
 export async function deleteCashMovementAction(
   formData: FormData,
 ): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   const walletId = String(formData.get("walletId") ?? "");
-  if (id) await deleteCashMovement(id, user.id);
+  if (id) await deleteCashMovement(id, profile.id);
   revalidatePath("/dashboard");
   if (walletId) {
     revalidatePath(`/wallets/${walletId}`);

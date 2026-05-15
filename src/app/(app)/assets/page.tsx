@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth-server";
-import { getUserAssets } from "@/lib/assets";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileAssets } from "@/lib/assets";
 import { ASSET_TYPE_LABELS, type AssetType } from "@/lib/constants";
 import { ui } from "@/lib/ui";
 import { AssetForm } from "@/components/asset-form";
@@ -8,8 +8,8 @@ import { DeleteButton } from "@/components/delete-button";
 import { deleteAssetAction } from "./actions";
 
 export default async function AssetsPage() {
-  const user = await requireUser();
-  const assets = await getUserAssets(user.id);
+  const { profile } = await requireProfile();
+  const assets = await getProfileAssets(profile.id);
 
   return (
     <div className="flex flex-col gap-6">

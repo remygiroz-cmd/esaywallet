@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth-server";
-import { getUserWallets } from "@/lib/wallets";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileWallets } from "@/lib/wallets";
 import { WALLET_TYPE_LABELS, type WalletType } from "@/lib/constants";
 import { ui } from "@/lib/ui";
 import { WalletCreateForm } from "@/components/wallet-create-form";
@@ -8,8 +8,8 @@ import { DeleteButton } from "@/components/delete-button";
 import { deleteWalletAction } from "./actions";
 
 export default async function WalletsPage() {
-  const user = await requireUser();
-  const wallets = await getUserWallets(user.id);
+  const { profile } = await requireProfile();
+  const wallets = await getProfileWallets(profile.id);
 
   return (
     <div className="flex flex-col gap-6">

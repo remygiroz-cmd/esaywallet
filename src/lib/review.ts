@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 
-// Surfaces gaps and inconsistencies in the user's data that need a manual
+// Surfaces gaps and inconsistencies in the profile's data that need a manual
 // decision — the "à vérifier" queue. Everything here is derived from the
 // existing records; fixing an item means editing the linked record.
 
@@ -30,19 +30,19 @@ function txSignature(tx: {
 }
 
 export async function loadReviewItems(
-  userId: string,
+  profileId: string,
 ): Promise<ReviewItem[]> {
   const [transactions, assets, wallets] = await Promise.all([
     prisma.transaction.findMany({
-      where: { wallet: { userId } },
+      where: { wallet: { profileId } },
       orderBy: { executedAt: "asc" },
       include: {
         wallet: { select: { id: true, name: true, type: true } },
         asset: { select: { id: true, name: true, symbol: true, type: true } },
       },
     }),
-    prisma.asset.findMany({ where: { userId } }),
-    prisma.wallet.findMany({ where: { userId } }),
+    prisma.asset.findMany({ where: { profileId } }),
+    prisma.wallet.findMany({ where: { profileId } }),
   ]);
 
   const items: ReviewItem[] = [];

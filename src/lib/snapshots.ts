@@ -14,14 +14,14 @@ function todayUtc(): Date {
 // dashboard refresh so today's point tracks the live value, while previous
 // days stay frozen — together they form the historical performance curve.
 export async function recordGlobalSnapshot(
-  userId: string,
+  profileId: string,
   totalValue: number,
   totalInvested: number,
   currency: string,
 ): Promise<void> {
   const date = todayUtc();
   const existing = await prisma.portfolioSnapshot.findFirst({
-    where: { userId, walletId: null, date },
+    where: { profileId, walletId: null, date },
   });
 
   if (existing) {
@@ -32,7 +32,7 @@ export async function recordGlobalSnapshot(
   } else {
     await prisma.portfolioSnapshot.create({
       data: {
-        userId,
+        profileId,
         walletId: null,
         date,
         totalValue,
@@ -44,10 +44,10 @@ export async function recordGlobalSnapshot(
 }
 
 export async function getGlobalSnapshots(
-  userId: string,
+  profileId: string,
 ): Promise<PortfolioSnapshotPoint[]> {
   const snapshots = await prisma.portfolioSnapshot.findMany({
-    where: { userId, walletId: null },
+    where: { profileId, walletId: null },
     orderBy: { date: "asc" },
   });
   return snapshots.map((snapshot) => ({

@@ -1,22 +1,23 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth-server";
+import { getCurrentSession } from "@/lib/auth-server";
 import { getDocumentContent } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
-// Streams a stored document back to its owner. Scoped by userId, so a
+// Streams a stored document back to its owner. Scoped by profileId, so a
 // document can never be fetched by anyone else — there is no public URL.
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  if (!user) {
+  const session = await getCurrentSession();
+  const profile = session?.profile;
+  if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
-  const doc = await getDocumentContent(id, user.id);
+  const doc = await getDocumentContent(id, profile!.id);
   if (!doc) {
     return NextResponse.json({ error: "Document introuvable" }, { status: 404 });
   }

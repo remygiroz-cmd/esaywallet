@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { ALERT_DIRECTIONS } from "@/lib/constants";
 import { createAlert, deleteAlert, rearmAlert } from "@/lib/alerts";
 
@@ -24,7 +24,7 @@ export async function createAlertAction(
   _prev: AlertFormState,
   formData: FormData,
 ): Promise<AlertFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const parsed = alertSchema.safeParse({
     assetId: formData.get("assetId"),
     direction: formData.get("direction"),
@@ -35,7 +35,7 @@ export async function createAlertAction(
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
 
-  const alert = await createAlert(user.id, {
+  const alert = await createAlert(profile.id, {
     assetId: parsed.data.assetId,
     direction: parsed.data.direction,
     threshold: parsed.data.threshold,
@@ -48,18 +48,18 @@ export async function createAlertAction(
 }
 
 export async function deleteAlertAction(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
-  if (id) await deleteAlert(id, user.id);
+  if (id) await deleteAlert(id, profile.id);
   revalidatePath("/alertes");
   revalidatePath("/dashboard");
   redirect("/alertes");
 }
 
 export async function rearmAlertAction(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
-  if (id) await rearmAlert(id, user.id);
+  if (id) await rearmAlert(id, profile.id);
   revalidatePath("/alertes");
   revalidatePath("/dashboard");
   redirect("/alertes");
@@ -68,8 +68,8 @@ export async function rearmAlertAction(formData: FormData): Promise<void> {
 // Called from the dashboard banner: removes a triggered alert once the user
 // has acknowledged it.
 export async function dismissAlertAction(id: string): Promise<void> {
-  const user = await requireUser();
-  if (id) await deleteAlert(id, user.id);
+  const { profile } = await requireProfile();
+  if (id) await deleteAlert(id, profile.id);
   revalidatePath("/dashboard");
   revalidatePath("/alertes");
 }

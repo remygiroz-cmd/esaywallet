@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { upsertTaxAdjustment } from "@/lib/fiscalite";
 
 export type TaxAdjustmentState = { error?: string; ok?: boolean };
@@ -16,7 +16,7 @@ export async function saveTaxAdjustmentAction(
   _prev: TaxAdjustmentState,
   formData: FormData,
 ): Promise<TaxAdjustmentState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const parsed = schema.safeParse({
     year: formData.get("year"),
     carryForwardLoss: formData.get("carryForwardLoss") || 0,
@@ -26,7 +26,7 @@ export async function saveTaxAdjustmentAction(
   }
 
   await upsertTaxAdjustment(
-    user.id,
+    profile.id,
     parsed.data.year,
     parsed.data.carryForwardLoss,
   );

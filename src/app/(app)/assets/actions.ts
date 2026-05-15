@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { ASSET_TYPES, SUPPORTED_CURRENCIES } from "@/lib/constants";
 import {
   getAsset,
@@ -55,12 +55,12 @@ export async function createAssetAction(
   _prev: AssetFormState,
   formData: FormData,
 ): Promise<AssetFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const parsed = parseAsset(formData);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  await upsertAsset(user.id, toAssetInput(parsed.data));
+  await upsertAsset(profile.id, toAssetInput(parsed.data));
   revalidatePath("/assets");
   revalidatePath("/transactions");
   return { ok: true, submittedAt: Date.now() };
@@ -70,14 +70,14 @@ export async function updateAssetAction(
   _prev: AssetFormState,
   formData: FormData,
 ): Promise<AssetFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Asset introuvable" };
   const parsed = parseAsset(formData);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
-  await updateAsset(id, user.id, toAssetInput(parsed.data));
+  await updateAsset(id, profile.id, toAssetInput(parsed.data));
   revalidatePath("/assets");
   revalidatePath(`/assets/${id}`);
   revalidatePath("/transactions");
@@ -86,13 +86,13 @@ export async function updateAssetAction(
 }
 
 export async function deleteAssetAction(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   if (id) {
-    const asset = await getAsset(id, user.id);
+    const asset = await getAsset(id, profile.id);
     // An asset that still has transactions cannot be deleted.
     if (asset && asset._count.transactions === 0) {
-      await deleteAsset(id, user.id);
+      await deleteAsset(id, profile.id);
     }
   }
   revalidatePath("/assets");

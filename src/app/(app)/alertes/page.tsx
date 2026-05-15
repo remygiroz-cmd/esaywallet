@@ -1,6 +1,6 @@
-import { requireUser } from "@/lib/auth-server";
-import { getUserAssets } from "@/lib/assets";
-import { getUserAlerts } from "@/lib/alerts";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileAssets } from "@/lib/assets";
+import { getProfileAlerts } from "@/lib/alerts";
 import { ALERT_DIRECTION_LABELS, type AlertDirection } from "@/lib/constants";
 import { ui } from "@/lib/ui";
 import { formatCurrency, formatDateTime } from "@/lib/format";
@@ -9,10 +9,10 @@ import { DeleteButton } from "@/components/delete-button";
 import { deleteAlertAction, rearmAlertAction } from "./actions";
 
 export default async function AlertesPage() {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const [assets, alerts] = await Promise.all([
-    getUserAssets(user.id),
-    getUserAlerts(user.id),
+    getProfileAssets(profile.id),
+    getProfileAlerts(profile.id),
   ]);
 
   return (

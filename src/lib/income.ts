@@ -17,45 +17,47 @@ const incomeInclude = {
   asset: { select: { id: true, name: true, symbol: true } },
 } as const;
 
-export function getUserIncome(userId: string) {
+export function getProfileIncome(profileId: string) {
   return prisma.income.findMany({
-    where: { wallet: { userId } },
+    where: { wallet: { profileId } },
     orderBy: { receivedAt: "desc" },
     include: incomeInclude,
   });
 }
 
-// Confirms the wallet and asset both belong to the user before linking.
+// Confirms the wallet and asset both belong to the profile before linking.
 async function assertOwnership(
-  userId: string,
+  profileId: string,
   walletId: string,
   assetId: string,
 ): Promise<boolean> {
   const [wallet, asset] = await Promise.all([
-    prisma.wallet.findFirst({ where: { id: walletId, userId } }),
-    prisma.asset.findFirst({ where: { id: assetId, userId } }),
+    prisma.wallet.findFirst({ where: { id: walletId, profileId } }),
+    prisma.asset.findFirst({ where: { id: assetId, profileId } }),
   ]);
   return Boolean(wallet && asset);
 }
 
-export async function createIncome(userId: string, data: IncomeInput) {
-  if (!(await assertOwnership(userId, data.walletId, data.assetId))) {
+export async function createIncome(profileId: string, data: IncomeInput) {
+  if (!(await assertOwnership(profileId, data.walletId, data.assetId))) {
     return null;
   }
   return prisma.income.create({ data });
 }
 
-export function deleteIncome(id: string, userId: string) {
-  return prisma.income.deleteMany({ where: { id, wallet: { userId } } });
+export function deleteIncome(id: string, profileId: string) {
+  return prisma.income.deleteMany({
+    where: { id, wallet: { profileId } },
+  });
 }
 
 // Total income received, converted to the reference currency would need FX;
 // for the dashboard total we sum amounts net of fees in their raw value —
 // callers that need currency-correctness should convert per wallet.
 export async function getIncomeTotalByCurrency(
-  userId: string,
+  profileId: string,
 ): Promise<Map<string, number>> {
-  const rows = await getUserIncome(userId);
+  const rows = await getProfileIncome(profileId);
   const totals = new Map<string, number>();
   for (const row of rows) {
     const net = row.amount.toNumber() - row.fees.toNumber();

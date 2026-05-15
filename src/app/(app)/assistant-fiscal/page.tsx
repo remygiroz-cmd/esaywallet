@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth-server";
-import { getUserDocuments } from "@/lib/documents";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileDocuments } from "@/lib/documents";
 import { ui } from "@/lib/ui";
 import { FiscalAssistant } from "@/components/fiscal-assistant";
 
 export default async function AssistantFiscalPage() {
-  const user = await requireUser();
-  const documents = await getUserDocuments(user.id);
+  const { profile } = await requireProfile();
+  const documents = await getProfileDocuments(profile.id);
 
   return (
     <div className="flex flex-col gap-6">

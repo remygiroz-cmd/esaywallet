@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { logoutAction } from "@/app/(auth)/actions";
+import { getUserProfiles } from "@/lib/profiles";
 import { AppNav } from "@/components/app-nav";
+import { ProfileSwitcher } from "@/components/profile-switcher";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireUser();
+  const { user, profile } = await requireProfile();
+  const profiles = await getUserProfiles(user.id);
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-zinc-50 dark:bg-black">
@@ -22,9 +25,13 @@ export default async function AppLayout({
               easyWallet
             </Link>
             <div className="flex items-center gap-3">
+              <ProfileSwitcher
+                profiles={profiles.map((p) => ({ id: p.id, name: p.name }))}
+                activeProfileId={profile.id}
+              />
               <Link
                 href="/parametres"
-                className="hidden max-w-[12rem] truncate text-sm text-zinc-500 transition-colors hover:text-emerald-600 sm:inline dark:text-zinc-400 dark:hover:text-emerald-400"
+                className="hidden max-w-[10rem] truncate text-sm text-zinc-500 transition-colors hover:text-emerald-600 sm:inline dark:text-zinc-400 dark:hover:text-emerald-400"
               >
                 {user.name ?? user.email}
               </Link>

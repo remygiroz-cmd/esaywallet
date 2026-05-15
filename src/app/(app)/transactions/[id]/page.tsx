@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth-server";
-import { getUserWallets } from "@/lib/wallets";
-import { getUserAssets } from "@/lib/assets";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileWallets } from "@/lib/wallets";
+import { getProfileAssets } from "@/lib/assets";
 import { getTransaction } from "@/lib/transactions";
 import { ui } from "@/lib/ui";
 import { toDateInputValue } from "@/lib/format";
@@ -16,11 +16,11 @@ export default async function TransactionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const [transaction, wallets, assets] = await Promise.all([
-    getTransaction(id, user.id),
-    getUserWallets(user.id),
-    getUserAssets(user.id),
+    getTransaction(id, profile.id),
+    getProfileWallets(profile.id),
+    getProfileAssets(profile.id),
   ]);
 
   if (!transaction) notFound();

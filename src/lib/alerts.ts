@@ -15,22 +15,22 @@ const alertInclude = {
   },
 } as const;
 
-export function getUserAlerts(userId: string) {
+export function getProfileAlerts(profileId: string) {
   return prisma.priceAlert.findMany({
-    where: { userId },
+    where: { profileId },
     orderBy: [{ triggeredAt: "desc" }, { createdAt: "desc" }],
     include: alertInclude,
   });
 }
 
-export async function createAlert(userId: string, data: AlertInput) {
+export async function createAlert(profileId: string, data: AlertInput) {
   const asset = await prisma.asset.findFirst({
-    where: { id: data.assetId, userId },
+    where: { id: data.assetId, profileId },
   });
   if (!asset) return null;
   return prisma.priceAlert.create({
     data: {
-      userId,
+      profileId,
       assetId: data.assetId,
       direction: data.direction,
       threshold: data.threshold,
@@ -39,23 +39,23 @@ export async function createAlert(userId: string, data: AlertInput) {
   });
 }
 
-export function deleteAlert(id: string, userId: string) {
-  return prisma.priceAlert.deleteMany({ where: { id, userId } });
+export function deleteAlert(id: string, profileId: string) {
+  return prisma.priceAlert.deleteMany({ where: { id, profileId } });
 }
 
 // Clears the triggered flag so the alert is armed again.
-export function rearmAlert(id: string, userId: string) {
+export function rearmAlert(id: string, profileId: string) {
   return prisma.priceAlert.updateMany({
-    where: { id, userId },
+    where: { id, profileId },
     data: { triggeredAt: null },
   });
 }
 
 // Checks every armed alert against the latest cached price and flags the
 // ones whose threshold has been crossed. Called on each dashboard refresh.
-export async function evaluateAlerts(userId: string): Promise<number> {
+export async function evaluateAlerts(profileId: string): Promise<number> {
   const alerts = await prisma.priceAlert.findMany({
-    where: { userId, triggeredAt: null },
+    where: { profileId, triggeredAt: null },
     include: { asset: { select: { price: true } } },
   });
 
@@ -94,10 +94,10 @@ export type TriggeredAlert = {
 };
 
 export async function getTriggeredAlerts(
-  userId: string,
+  profileId: string,
 ): Promise<TriggeredAlert[]> {
   const alerts = await prisma.priceAlert.findMany({
-    where: { userId, triggeredAt: { not: null } },
+    where: { profileId, triggeredAt: { not: null } },
     orderBy: { triggeredAt: "desc" },
     include: {
       asset: {

@@ -62,6 +62,11 @@ export async function registerAction(
       name,
       email: normalizedEmail,
       passwordHash: await hashPassword(password),
+      // Every account starts with a default profile — all data hangs off
+      // it. Extra profiles (a child's, a partner's…) can be added later.
+      profiles: {
+        create: { name: "Mon portefeuille", isDefault: true },
+      },
     },
   });
 

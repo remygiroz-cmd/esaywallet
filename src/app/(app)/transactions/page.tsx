@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth-server";
-import { getUserWallets } from "@/lib/wallets";
-import { getUserAssets } from "@/lib/assets";
-import { getUserTransactions } from "@/lib/transactions";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileWallets } from "@/lib/wallets";
+import { getProfileAssets } from "@/lib/assets";
+import { getProfileTransactions } from "@/lib/transactions";
 import { ui } from "@/lib/ui";
 import { toDateInputValue } from "@/lib/format";
 import { TransactionForm } from "@/components/transaction-form";
@@ -12,11 +12,11 @@ import {
 } from "@/components/transaction-table";
 
 export default async function TransactionsPage() {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const [wallets, assets, transactions] = await Promise.all([
-    getUserWallets(user.id),
-    getUserAssets(user.id),
-    getUserTransactions(user.id),
+    getProfileWallets(profile.id),
+    getProfileAssets(profile.id),
+    getProfileTransactions(profile.id),
   ]);
 
   const rows: TransactionRow[] = transactions.map((tx) => ({

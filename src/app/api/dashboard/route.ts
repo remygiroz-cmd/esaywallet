@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth-server";
+import { getCurrentSession } from "@/lib/auth-server";
 import { refreshPrices } from "@/lib/prices/service";
 import { loadPortfolio } from "@/lib/portfolio-server";
 import { getIncomeTotalByCurrency } from "@/lib/income";
@@ -12,26 +12,27 @@ export const dynamic = "force-dynamic";
 // the portfolio at all four levels, updates today's history snapshot and
 // returns everything the dashboard needs.
 export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) {
+  const session = await getCurrentSession();
+  const profile = session?.profile;
+  if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
-  const refresh = await refreshPrices(user.id);
-  const portfolio = await loadPortfolio(user.id);
-  const incomeByCurrency = await getIncomeTotalByCurrency(user.id);
+  const refresh = await refreshPrices(profile!.id);
+  const portfolio = await loadPortfolio(profile!.id);
+  const incomeByCurrency = await getIncomeTotalByCurrency(profile!.id);
 
   // Live prices were just refreshed — check the alert thresholds against them.
-  await evaluateAlerts(user.id);
-  const alerts = await getTriggeredAlerts(user.id);
+  await evaluateAlerts(profile!.id);
+  const alerts = await getTriggeredAlerts(profile!.id);
 
   await recordGlobalSnapshot(
-    user.id,
+    profile!.id,
     portfolio.currentValue,
     portfolio.totalCost,
     portfolio.referenceCurrency,
   );
-  const history = await getGlobalSnapshots(user.id);
+  const history = await getGlobalSnapshots(profile!.id);
 
   return NextResponse.json({
     portfolio,

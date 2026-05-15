@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth-server";
+import { getCurrentSession } from "@/lib/auth-server";
 import { getAsset } from "@/lib/assets";
 import {
   fetchAssetHistory,
@@ -15,13 +15,14 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
+  const session = await getCurrentSession();
+  const profile = session?.profile;
+  if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
   const { id } = await context.params;
-  const asset = await getAsset(id, user.id);
+  const asset = await getAsset(id, profile!.id);
   if (!asset) {
     return NextResponse.json({ error: "Asset introuvable" }, { status: 404 });
   }

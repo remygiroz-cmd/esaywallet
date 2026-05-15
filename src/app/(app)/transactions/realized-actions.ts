@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import {
   createRealizedGainEntries,
   deleteRealizedGainEntry,
@@ -36,7 +36,7 @@ export async function importRealizedGainsAction(
   _prev: RealizedImportState,
   formData: FormData,
 ): Promise<RealizedImportState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
 
   let raw: unknown;
   try {
@@ -53,7 +53,7 @@ export async function importRealizedGainsAction(
   }
 
   const count = await createRealizedGainEntries(
-    user.id,
+    profile.id,
     parsed.data.walletId,
     parsed.data.year,
     parsed.data.source?.trim() || null,
@@ -70,9 +70,9 @@ export async function importRealizedGainsAction(
 export async function deleteRealizedGainEntryAction(
   formData: FormData,
 ): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
-  if (id) await deleteRealizedGainEntry(id, user.id);
+  if (id) await deleteRealizedGainEntry(id, profile.id);
   revalidatePath("/transactions/import");
   revalidatePath("/fiscalite");
   revalidatePath("/dashboard");

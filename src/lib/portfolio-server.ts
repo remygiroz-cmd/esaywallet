@@ -10,16 +10,16 @@ import {
 // Gathers every input the computation engine needs and converts Prisma
 // Decimal values to plain numbers so the result is JSON-serialisable.
 export async function loadPortfolioInput(
-  userId: string,
+  profileId: string,
 ): Promise<PortfolioInput> {
   const [wallets, assets, transactions, prices, fxRates, cashByWallet] =
     await Promise.all([
-      prisma.wallet.findMany({ where: { userId } }),
-      prisma.asset.findMany({ where: { userId } }),
-      prisma.transaction.findMany({ where: { wallet: { userId } } }),
-      prisma.priceCache.findMany({ where: { asset: { userId } } }),
+      prisma.wallet.findMany({ where: { profileId } }),
+      prisma.asset.findMany({ where: { profileId } }),
+      prisma.transaction.findMany({ where: { wallet: { profileId } } }),
+      prisma.priceCache.findMany({ where: { asset: { profileId } } }),
       prisma.fxRate.findMany({ where: { base: "EUR" } }),
-      getCashByWallet(userId),
+      getCashByWallet(profileId),
     ]);
 
   return {
@@ -66,7 +66,7 @@ export async function loadPortfolioInput(
 }
 
 export async function loadPortfolio(
-  userId: string,
+  profileId: string,
 ): Promise<PortfolioComputation> {
-  return computePortfolio(await loadPortfolioInput(userId));
+  return computePortfolio(await loadPortfolioInput(profileId));
 }
