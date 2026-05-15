@@ -533,8 +533,8 @@ function AssetRow({
               {ASSET_TYPE_LABELS[asset.type as AssetType] ?? asset.type} ·{" "}
               {formatQuantity(asset.totalQuantity)} unité
               {asset.totalQuantity > 1 ? "s" : ""}
-              {asset.avgBuyPrice > 0
-                ? ` · PRU ${formatCurrency(asset.avgBuyPrice, asset.quoteCurrency)}`
+              {asset.avgCost > 0
+                ? ` · PRU ${formatCurrency(asset.avgCost, referenceCurrency)}`
                 : ""}
             </p>
           </div>
@@ -592,8 +592,8 @@ function AssetRow({
             </p>
             <AssetPriceChart
               assetId={asset.assetId}
-              breakEven={asset.avgBuyPrice}
-              breakEvenCurrency={asset.quoteCurrency}
+              breakEven={asset.avgCost}
+              breakEvenCurrency={referenceCurrency}
             />
           </div>
           <div className="overflow-x-auto">
@@ -630,7 +630,12 @@ function AssetRow({
                       {formatQuantity(lot.quantity)}
                     </td>
                     <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
-                      {formatCurrency(lot.unitPrice, asset.quoteCurrency)}
+                      {lot.quantity > 0
+                        ? formatCurrency(
+                            lot.costBasis / lot.quantity,
+                            lot.walletCurrency,
+                          )
+                        : "—"}
                     </td>
                     <td className="py-2 text-right text-zinc-600 dark:text-zinc-300">
                       {formatCurrency(lot.costBasis, lot.walletCurrency)}
