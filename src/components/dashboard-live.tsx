@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   PortfolioComputation,
@@ -35,15 +35,28 @@ import { AllocationSection } from "./allocation-section";
 type DashboardResponse = {
   portfolio: PortfolioComputation;
   history: PortfolioSnapshotPoint[];
-  refresh: { refreshedAt: string; updated: number; errors: string[] };
   income: Record<string, number>;
   alerts: TriggeredAlert[];
+};
+
+type RefreshResult = {
+  refreshedAt: string;
+  updated: number;
+  errors: string[];
 };
 
 async function fetchDashboard(): Promise<DashboardResponse> {
   const res = await fetch("/api/dashboard");
   if (!res.ok) {
     throw new Error("Impossible de charger le tableau de bord.");
+  }
+  return res.json();
+}
+
+async function triggerRefresh(): Promise<RefreshResult> {
+  const res = await fetch("/api/prices/refresh", { method: "POST" });
+  if (!res.ok) {
+    return { refreshedAt: new Date().toISOString(), updated: 0, errors: [] };
   }
   return res.json();
 }
@@ -67,19 +80,38 @@ export function DashboardLive({
       placeholderData: {
         portfolio: initialPortfolio,
         history: initialHistory,
-        refresh: {
-          refreshedAt: initialPortfolio.generatedAt,
-          updated: 0,
-          errors: [],
-        },
         income: initialIncome,
         alerts: initialAlerts,
       },
     });
 
+  // The dashboard endpoint returns cached data instantly; the price
+  // refresh runs in parallel and triggers a refetch when it completes,
+  // so the UI is interactive immediately and converges to fresh prices
+  // a couple of seconds later.
+  const [refresh, setRefresh] = useState<RefreshResult>({
+    refreshedAt: initialPortfolio.generatedAt,
+    updated: 0,
+    errors: [],
+  });
+  useEffect(() => {
+    let cancelled = false;
+    async function tick() {
+      const result = await triggerRefresh();
+      if (cancelled) return;
+      setRefresh(result);
+      refetch();
+    }
+    tick();
+    const interval = setInterval(tick, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [refetch]);
+
   // `data` is always defined here thanks to placeholderData.
-  const { portfolio, history, refresh, income, alerts } =
-    data as DashboardResponse;
+  const { portfolio, history, income, alerts } = data as DashboardResponse;
   const hasTransactions = portfolio.assets.length > 0;
 
   // The "focused" wallet: its card is expanded and the assets list below
@@ -101,7 +133,11 @@ export function DashboardLive({
         </div>
         <button
           type="button"
-          onClick={() => refetch()}
+          onClick={async () => {
+            const result = await triggerRefresh();
+            setRefresh(result);
+            refetch();
+          }}
           disabled={isFetching}
           className={ui.secondaryButton}
         >

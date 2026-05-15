@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useRef } from "react";
-import { switchProfileAction } from "@/app/(app)/profils/actions";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 type ProfileOption = {
   id: string;
   name: string;
 };
 
-// Switches between profiles. The select submits its parent form on
-// change, which is a server action that sets the active-profile cookie
-// and redirects back to the page the user was on.
+// Switches between profiles client-side: posts the new profile id to a
+// route handler that flips the cookie, then triggers a router.refresh()
+// (re-renders server components) plus a react-query invalidate so the
+// dashboard's polled data is fetched fresh. No page reload needed.
 export function ProfileSwitcher({
   profiles,
   activeProfileId,
@@ -20,23 +21,39 @@ export function ProfileSwitcher({
   profiles: ProfileOption[];
   activeProfileId: string;
 }) {
-  const pathname = usePathname();
-  const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [pending, startTransition] = useTransition();
+  const [value, setValue] = useState(activeProfileId);
 
   if (profiles.length === 0) return null;
 
+  function switchTo(profileId: string) {
+    if (profileId === activeProfileId) return;
+    setValue(profileId);
+    startTransition(async () => {
+      const response = await fetch("/api/profile/switch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ profileId }),
+      });
+      if (!response.ok) {
+        setValue(activeProfileId);
+        return;
+      }
+      // Drop every cached query — they're all profile-scoped.
+      await queryClient.invalidateQueries();
+      router.refresh();
+    });
+  }
+
   return (
-    <form
-      ref={formRef}
-      action={switchProfileAction}
-      className="flex items-center gap-2"
-    >
-      <input type="hidden" name="next" value={pathname} />
+    <div className="flex items-center gap-2">
       <select
-        name="profileId"
-        defaultValue={activeProfileId}
-        onChange={() => formRef.current?.requestSubmit()}
-        className="max-w-[10rem] truncate rounded-lg border border-black/[.12] bg-white px-2 py-1 text-sm text-zinc-700 dark:border-white/[.16] dark:bg-black dark:text-zinc-200"
+        value={value}
+        onChange={(event) => switchTo(event.target.value)}
+        disabled={pending}
+        className="max-w-[10rem] truncate rounded-lg border border-black/[.12] bg-white px-2 py-1 text-sm text-zinc-700 disabled:opacity-60 dark:border-white/[.16] dark:bg-black dark:text-zinc-200"
         aria-label="Profil actif"
       >
         {profiles.map((profile) => (
@@ -52,6 +69,6 @@ export function ProfileSwitcher({
       >
         Gérer
       </Link>
-    </form>
+    </div>
   );
 }
