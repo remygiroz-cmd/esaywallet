@@ -23,14 +23,14 @@ function isStale(price: { fetchedAt: Date } | null, now: number): boolean {
 }
 
 export async function refreshPrices(
-  userId: string,
+  profileId: string,
 ): Promise<PriceRefreshResult> {
   const now = Date.now();
   const errors: string[] = [];
   let updated = 0;
 
   const assets = await prisma.asset.findMany({
-    where: { userId },
+    where: { profileId },
     include: { price: true },
   });
 
@@ -152,8 +152,8 @@ async function refreshFxRates(now: number, errors: string[]): Promise<void> {
 }
 
 // Read-only cache accessors consumed by the dashboard.
-export function getCachedPrices(userId: string) {
-  return prisma.priceCache.findMany({ where: { asset: { userId } } });
+export function getCachedPrices(profileId: string) {
+  return prisma.priceCache.findMany({ where: { asset: { profileId } } });
 }
 
 export function getCachedFxRates() {

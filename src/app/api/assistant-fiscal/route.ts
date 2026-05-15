@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth-server";
+import { getCurrentSession } from "@/lib/auth-server";
 import { runFiscalAssistant } from "@/lib/fiscal-assistant";
 
 export const dynamic = "force-dynamic";
@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
-  if (!user) {
+  const session = await getCurrentSession();
+  const profile = session?.profile;
+  if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   }
   const answers = typeof body.answers === "string" ? body.answers : "";
 
-  const result = await runFiscalAssistant(user.id, taxYear, answers);
+  const result = await runFiscalAssistant(profile!.id, taxYear, answers);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }

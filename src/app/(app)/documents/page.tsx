@@ -1,5 +1,5 @@
-import { requireUser } from "@/lib/auth-server";
-import { getUserDocuments } from "@/lib/documents";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileDocuments } from "@/lib/documents";
 import {
   DOCUMENT_CATEGORY_LABELS,
   type DocumentCategory,
@@ -17,8 +17,8 @@ function formatBytes(bytes: number): string {
 }
 
 export default async function DocumentsPage() {
-  const user = await requireUser();
-  const documents = await getUserDocuments(user.id);
+  const { profile } = await requireProfile();
+  const documents = await getProfileDocuments(profile.id);
 
   return (
     <div className="flex flex-col gap-6">

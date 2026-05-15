@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { INCOME_KINDS } from "@/lib/constants";
 import { createIncome, deleteIncome } from "@/lib/income";
 
@@ -27,7 +27,7 @@ export async function createIncomeAction(
   _prev: IncomeFormState,
   formData: FormData,
 ): Promise<IncomeFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const parsed = incomeSchema.safeParse({
     walletId: formData.get("walletId"),
     assetId: formData.get("assetId"),
@@ -41,7 +41,7 @@ export async function createIncomeAction(
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
 
-  const income = await createIncome(user.id, {
+  const income = await createIncome(profile.id, {
     walletId: parsed.data.walletId,
     assetId: parsed.data.assetId,
     kind: parsed.data.kind,
@@ -59,10 +59,10 @@ export async function createIncomeAction(
 }
 
 export async function deleteIncomeAction(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   if (id) {
-    await deleteIncome(id, user.id);
+    await deleteIncome(id, profile.id);
   }
   revalidatePath("/revenus");
   revalidatePath("/dashboard");

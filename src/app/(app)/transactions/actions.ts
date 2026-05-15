@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import {
   ASSET_TYPES,
   SUPPORTED_CURRENCIES,
@@ -79,7 +79,7 @@ function parseTransaction(formData: FormData) {
 // The transaction form can either reference an existing asset or define a
 // brand new one inline. This resolves both cases to a single asset id.
 async function resolveAssetId(
-  userId: string,
+  profileId: string,
   formData: FormData,
 ): Promise<{ assetId: string } | { error: string }> {
   if (formData.get("assetMode") === "new") {
@@ -94,7 +94,7 @@ async function resolveAssetId(
       return { error: parsed.error.issues[0]?.message ?? "Asset invalide" };
     }
     const externalId = parsed.data.externalId.trim() || null;
-    const asset = await upsertAsset(userId, {
+    const asset = await upsertAsset(profileId, {
       name: parsed.data.name,
       symbol: parsed.data.symbol.toUpperCase(),
       type: parsed.data.type,
@@ -114,7 +114,7 @@ export async function createTransactionAction(
   _prev: TransactionFormState,
   formData: FormData,
 ): Promise<TransactionFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const parsed = parseTransaction(formData);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
@@ -124,10 +124,10 @@ export async function createTransactionAction(
     return { error: "Un asset doit déjà exister pour être vendu." };
   }
 
-  const assetResult = await resolveAssetId(user.id, formData);
+  const assetResult = await resolveAssetId(profile.id, formData);
   if ("error" in assetResult) return { error: assetResult.error };
 
-  const tx = await createTransaction(user.id, {
+  const tx = await createTransaction(profile.id, {
     walletId: parsed.data.walletId,
     assetId: assetResult.assetId,
     type: parsed.data.type,
@@ -152,7 +152,7 @@ export async function updateTransactionAction(
   _prev: TransactionFormState,
   formData: FormData,
 ): Promise<TransactionFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Transaction introuvable" };
 
@@ -165,10 +165,10 @@ export async function updateTransactionAction(
     return { error: "Un asset doit déjà exister pour être vendu." };
   }
 
-  const assetResult = await resolveAssetId(user.id, formData);
+  const assetResult = await resolveAssetId(profile.id, formData);
   if ("error" in assetResult) return { error: assetResult.error };
 
-  const tx = await updateTransaction(id, user.id, {
+  const tx = await updateTransaction(id, profile.id, {
     walletId: parsed.data.walletId,
     assetId: assetResult.assetId,
     type: parsed.data.type,
@@ -191,10 +191,10 @@ export async function updateTransactionAction(
 export async function deleteTransactionAction(
   formData: FormData,
 ): Promise<void> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const id = String(formData.get("id") ?? "");
   if (id) {
-    await deleteTransaction(id, user.id);
+    await deleteTransaction(id, profile.id);
   }
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
@@ -214,9 +214,9 @@ export async function moveAssetWalletAction(
   fromWalletId: string,
   toWalletId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const moved = await moveAssetTransactions(
-    user.id,
+    profile.id,
     assetId,
     fromWalletId,
     toWalletId,
@@ -235,7 +235,7 @@ export async function deleteTransactionsBulkAction(
   _prev: BulkDeleteState,
   formData: FormData,
 ): Promise<BulkDeleteState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const ids = formData
     .getAll("ids")
     .map((value) => String(value))
@@ -245,7 +245,7 @@ export async function deleteTransactionsBulkAction(
     return { error: "Aucune transaction sélectionnée." };
   }
 
-  const deleted = await deleteTransactionsBulk(user.id, ids);
+  const deleted = await deleteTransactionsBulk(profile.id, ids);
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
   revalidatePath("/wallets/[id]", "page");
@@ -262,7 +262,7 @@ export async function importTransactionsAction(
   _prev: ImportFormState,
   formData: FormData,
 ): Promise<ImportFormState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const walletId = String(formData.get("walletId") ?? "");
   const assetId = String(formData.get("assetId") ?? "");
   const text = String(formData.get("data") ?? "");
@@ -280,7 +280,7 @@ export async function importTransactionsAction(
   }
 
   const count = await createTransactionsBulk(
-    user.id,
+    profile.id,
     walletId,
     assetId,
     rows.map((row) => ({
@@ -320,7 +320,7 @@ export async function importCmcAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const text = String(formData.get("data") ?? "");
 
   const { rows } = parseCmcCsv(text);
@@ -356,7 +356,7 @@ export async function importCmcAction(
   const assetIdByToken = new Map<string, string>();
   for (const token of tokens) {
     const resolved = resolvedByToken.get(token);
-    const asset = await upsertAsset(user.id, {
+    const asset = await upsertAsset(profile.id, {
       symbol: token,
       name: resolved?.name ?? token,
       type: "CRYPTO",
@@ -368,7 +368,7 @@ export async function importCmcAction(
   }
 
   const count = await createBulkTransactions(
-    user.id,
+    profile.id,
     rows.map((row) => ({
       walletId: walletByToken.get(row.token) as string,
       assetId: assetIdByToken.get(row.token) as string,
@@ -402,7 +402,7 @@ export async function importBitstackAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const text = String(formData.get("data") ?? "");
 
   const { rows } = parseBitstackCsv(text);
@@ -438,7 +438,7 @@ export async function importBitstackAction(
   const assetIdByToken = new Map<string, string>();
   for (const token of tokens) {
     const resolved = resolvedByToken.get(token);
-    const asset = await upsertAsset(user.id, {
+    const asset = await upsertAsset(profile.id, {
       symbol: token,
       name: resolved?.name ?? token,
       type: "CRYPTO",
@@ -450,7 +450,7 @@ export async function importBitstackAction(
   }
 
   const count = await createBulkTransactions(
-    user.id,
+    profile.id,
     rows.map((row) => ({
       walletId: walletByToken.get(row.token) as string,
       assetId: assetIdByToken.get(row.token) as string,
@@ -485,7 +485,7 @@ export async function importBinanceAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const text = String(formData.get("data") ?? "");
 
   const { rows } = parseBinanceCsv(text);
@@ -535,7 +535,7 @@ export async function importBinanceAction(
       counts.set(row.currency, (counts.get(row.currency) ?? 0) + 1);
     }
     const currency = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    const asset = await upsertAsset(user.id, {
+    const asset = await upsertAsset(profile.id, {
       symbol: token,
       name: resolved?.name ?? token,
       type: "CRYPTO",
@@ -547,7 +547,7 @@ export async function importBinanceAction(
   }
 
   const count = await createBulkTransactions(
-    user.id,
+    profile.id,
     rows.map((row) => ({
       walletId: walletByToken.get(row.token) as string,
       assetId: assetIdByToken.get(row.token) as string,
@@ -581,7 +581,7 @@ export async function importCryptoComAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const text = String(formData.get("data") ?? "");
 
   const { rows } = parseCryptoComCsv(text);
@@ -631,7 +631,7 @@ export async function importCryptoComAction(
       counts.set(row.currency, (counts.get(row.currency) ?? 0) + 1);
     }
     const currency = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    const asset = await upsertAsset(user.id, {
+    const asset = await upsertAsset(profile.id, {
       symbol: token,
       name: resolved?.name ?? token,
       type: "CRYPTO",
@@ -643,7 +643,7 @@ export async function importCryptoComAction(
   }
 
   const count = await createBulkTransactions(
-    user.id,
+    profile.id,
     rows.map((row) => ({
       walletId: walletByToken.get(row.token) as string,
       assetId: assetIdByToken.get(row.token) as string,
@@ -678,7 +678,7 @@ export async function importTrAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const text = String(formData.get("data") ?? "");
 
   const { rows } = parseTrCsv(text);
@@ -723,7 +723,7 @@ export async function importTrAction(
   for (const isin of isins) {
     const sample = (rowsByIsin.get(isin) as typeof rows)[0];
     const resolved = resolvedByIsin.get(isin);
-    const asset = await upsertAsset(user.id, {
+    const asset = await upsertAsset(profile.id, {
       symbol: resolved?.symbol ?? isin,
       name: sample.name || resolved?.name || isin,
       type: sample.assetType,
@@ -735,7 +735,7 @@ export async function importTrAction(
   }
 
   const count = await createBulkTransactions(
-    user.id,
+    profile.id,
     rows.map((row) => ({
       walletId: walletByIsin.get(row.isin) as string,
       assetId: assetIdByIsin.get(row.isin) as string,
@@ -769,7 +769,7 @@ export async function importMultiAction(
   _prev: BulkImportState,
   formData: FormData,
 ): Promise<BulkImportState> {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
 
   let payload: {
     rows: ImportPayloadRow[];
@@ -834,7 +834,7 @@ export async function importMultiAction(
           };
     if (resolved.coingeckoId || resolved.yahooSymbol) resolvedCount += 1;
 
-    const asset = await upsertAsset(user.id, {
+    const asset = await upsertAsset(profile.id, {
       symbol: resolved.symbol,
       name: resolved.name,
       type: resolved.type,
@@ -846,7 +846,7 @@ export async function importMultiAction(
   }
 
   const count = await createBulkTransactions(
-    user.id,
+    profile.id,
     rows.map((row) => ({
       walletId: payload.walletBySymbol[row.symbol],
       assetId: assetIdBySymbol.get(row.symbol) as string,

@@ -9,47 +9,47 @@ export type CashMovementInput = {
   note: string | null;
 };
 
-export function getWalletCashMovements(walletId: string, userId: string) {
+export function getWalletCashMovements(walletId: string, profileId: string) {
   return prisma.cashMovement.findMany({
-    where: { walletId, wallet: { userId } },
+    where: { walletId, wallet: { profileId } },
     orderBy: { occurredAt: "desc" },
   });
 }
 
 export async function createCashMovement(
   walletId: string,
-  userId: string,
+  profileId: string,
   data: CashMovementInput,
 ) {
   const wallet = await prisma.wallet.findFirst({
-    where: { id: walletId, userId },
+    where: { id: walletId, profileId },
   });
   if (!wallet) return null;
   return prisma.cashMovement.create({ data: { ...data, walletId } });
 }
 
-export function deleteCashMovement(id: string, userId: string) {
+export function deleteCashMovement(id: string, profileId: string) {
   return prisma.cashMovement.deleteMany({
-    where: { id, wallet: { userId } },
+    where: { id, wallet: { profileId } },
   });
 }
 
 // The cash balance of every wallet, in the wallet's own currency:
 // deposits − withdrawals − buy outflows + sell proceeds + income received.
 export async function getCashByWallet(
-  userId: string,
+  profileId: string,
 ): Promise<Map<string, number>> {
   const [movements, transactions, income] = await Promise.all([
     prisma.cashMovement.findMany({
-      where: { wallet: { userId } },
+      where: { wallet: { profileId } },
       select: { walletId: true, kind: true, amount: true },
     }),
     prisma.transaction.findMany({
-      where: { wallet: { userId } },
+      where: { wallet: { profileId } },
       select: { walletId: true, type: true, amountInvested: true, fees: true },
     }),
     prisma.income.findMany({
-      where: { wallet: { userId } },
+      where: { wallet: { profileId } },
       select: { walletId: true, amount: true, fees: true },
     }),
   ]);

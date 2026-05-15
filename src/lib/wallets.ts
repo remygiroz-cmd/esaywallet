@@ -10,27 +10,27 @@ export type WalletInput = {
   openedAt: Date | null;
 };
 
-export function getUserWallets(userId: string) {
+export function getProfileWallets(profileId: string) {
   return prisma.wallet.findMany({
-    where: { userId },
+    where: { profileId },
     orderBy: { createdAt: "asc" },
     include: { _count: { select: { transactions: true } } },
   });
 }
 
-export function getWallet(id: string, userId: string) {
-  return prisma.wallet.findFirst({ where: { id, userId } });
+export function getWallet(id: string, profileId: string) {
+  return prisma.wallet.findFirst({ where: { id, profileId } });
 }
 
-export function createWallet(userId: string, data: WalletInput) {
-  return prisma.wallet.create({ data: { ...data, userId } });
+export function createWallet(profileId: string, data: WalletInput) {
+  return prisma.wallet.create({ data: { ...data, profileId } });
 }
 
-// Scoped by userId so a user can never mutate another user's wallet.
-export function updateWallet(id: string, userId: string, data: WalletInput) {
-  return prisma.wallet.updateMany({ where: { id, userId }, data });
+// Scoped by profileId so a profile can never mutate another's wallet.
+export function updateWallet(id: string, profileId: string, data: WalletInput) {
+  return prisma.wallet.updateMany({ where: { id, profileId }, data });
 }
 
-export function deleteWallet(id: string, userId: string) {
-  return prisma.wallet.deleteMany({ where: { id, userId } });
+export function deleteWallet(id: string, profileId: string) {
+  return prisma.wallet.deleteMany({ where: { id, profileId } });
 }

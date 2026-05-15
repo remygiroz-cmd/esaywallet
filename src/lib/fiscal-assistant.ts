@@ -78,12 +78,12 @@ type AppContext = {
 };
 
 async function gatherAppContext(
-  userId: string,
+  profileId: string,
   taxYear: number,
 ): Promise<AppContext> {
   const [wallets, fiscalData] = await Promise.all([
     prisma.wallet.findMany({
-      where: { userId },
+      where: { profileId },
       select: {
         name: true,
         type: true,
@@ -92,7 +92,7 @@ async function gatherAppContext(
         taxRate: true,
       },
     }),
-    loadFiscalData(userId),
+    loadFiscalData(profileId),
   ]);
 
   const inYear = (iso: string) => new Date(iso).getFullYear() === taxYear;
@@ -119,11 +119,11 @@ async function gatherAppContext(
 // blocks, text/CSV inline as text. Returns the blocks plus a note listing
 // anything that couldn't be included.
 async function gatherDocumentBlocks(
-  userId: string,
+  profileId: string,
   taxYear: number,
 ): Promise<{ blocks: Anthropic.ContentBlockParam[]; skipped: string[] }> {
   const docs = await prisma.document.findMany({
-    where: { userId, OR: [{ year: taxYear }, { year: null }] },
+    where: { profileId, OR: [{ year: taxYear }, { year: null }] },
     orderBy: { createdAt: "desc" },
     take: MAX_DOCS,
     select: {
@@ -189,7 +189,7 @@ async function gatherDocumentBlocks(
 }
 
 export async function runFiscalAssistant(
-  userId: string,
+  profileId: string,
   taxYear: number,
   userAnswers: string,
 ): Promise<FiscalAssistantResult> {
@@ -202,8 +202,8 @@ export async function runFiscalAssistant(
   }
 
   const [appContext, documents] = await Promise.all([
-    gatherAppContext(userId, taxYear),
-    gatherDocumentBlocks(userId, taxYear),
+    gatherAppContext(profileId, taxYear),
+    gatherDocumentBlocks(profileId, taxYear),
   ]);
 
   const intro =

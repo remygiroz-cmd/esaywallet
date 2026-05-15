@@ -28,9 +28,9 @@ export type DocumentInput = {
 
 // Metadata only — never selects the `content` blob, so listing the vault
 // stays cheap.
-export function getUserDocuments(userId: string) {
+export function getProfileDocuments(profileId: string) {
   return prisma.document.findMany({
-    where: { userId },
+    where: { profileId },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -45,20 +45,20 @@ export function getUserDocuments(userId: string) {
   });
 }
 
-export function getDocumentContent(id: string, userId: string) {
+export function getDocumentContent(id: string, profileId: string) {
   return prisma.document.findFirst({
-    where: { id, userId },
+    where: { id, profileId },
     select: { name: true, mimeType: true, content: true },
   });
 }
 
-export function createDocument(userId: string, data: DocumentInput) {
+export function createDocument(profileId: string, data: DocumentInput) {
   return prisma.document.create({
-    data: { ...data, userId },
+    data: { ...data, profileId },
     select: { id: true },
   });
 }
 
-export function deleteDocument(id: string, userId: string) {
-  return prisma.document.deleteMany({ where: { id, userId } });
+export function deleteDocument(id: string, profileId: string) {
+  return prisma.document.deleteMany({ where: { id, profileId } });
 }

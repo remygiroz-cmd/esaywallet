@@ -30,47 +30,47 @@ const txInclude = {
   },
 } as const;
 
-export function getUserTransactions(userId: string) {
+export function getProfileTransactions(profileId: string) {
   return prisma.transaction.findMany({
-    where: { wallet: { userId } },
+    where: { wallet: { profileId } },
     orderBy: { executedAt: "desc" },
     include: txInclude,
   });
 }
 
-export function getWalletTransactions(walletId: string, userId: string) {
+export function getWalletTransactions(walletId: string, profileId: string) {
   return prisma.transaction.findMany({
-    where: { walletId, wallet: { userId } },
+    where: { walletId, wallet: { profileId } },
     orderBy: { executedAt: "desc" },
     include: txInclude,
   });
 }
 
-export function getTransaction(id: string, userId: string) {
+export function getTransaction(id: string, profileId: string) {
   return prisma.transaction.findFirst({
-    where: { id, wallet: { userId } },
+    where: { id, wallet: { profileId } },
     include: txInclude,
   });
 }
 
-// Confirms the wallet and asset both belong to the user before linking them.
+// Confirms the wallet and asset both belong to the profile before linking.
 async function assertOwnership(
-  userId: string,
+  profileId: string,
   walletId: string,
   assetId: string,
 ): Promise<boolean> {
   const [wallet, asset] = await Promise.all([
-    prisma.wallet.findFirst({ where: { id: walletId, userId } }),
-    prisma.asset.findFirst({ where: { id: assetId, userId } }),
+    prisma.wallet.findFirst({ where: { id: walletId, profileId } }),
+    prisma.asset.findFirst({ where: { id: assetId, profileId } }),
   ]);
   return Boolean(wallet && asset);
 }
 
 export async function createTransaction(
-  userId: string,
+  profileId: string,
   data: TransactionInput,
 ) {
-  if (!(await assertOwnership(userId, data.walletId, data.assetId))) {
+  if (!(await assertOwnership(profileId, data.walletId, data.assetId))) {
     return null;
   }
   return prisma.transaction.create({ data });
@@ -78,27 +78,27 @@ export async function createTransaction(
 
 export async function updateTransaction(
   id: string,
-  userId: string,
+  profileId: string,
   data: TransactionInput,
 ) {
   const existing = await prisma.transaction.findFirst({
-    where: { id, wallet: { userId } },
+    where: { id, wallet: { profileId } },
   });
   if (!existing) return null;
-  if (!(await assertOwnership(userId, data.walletId, data.assetId))) {
+  if (!(await assertOwnership(profileId, data.walletId, data.assetId))) {
     return null;
   }
   return prisma.transaction.update({ where: { id }, data });
 }
 
-export function deleteTransaction(id: string, userId: string) {
-  return prisma.transaction.deleteMany({ where: { id, wallet: { userId } } });
+export function deleteTransaction(id: string, profileId: string) {
+  return prisma.transaction.deleteMany({ where: { id, wallet: { profileId } } });
 }
 
 // Moves every transaction of an asset from one wallet to another (i.e.
-// reassigns the asset's whole position). Scoped to the user's own data.
+// reassigns the asset's whole position). Scoped to the profile's data.
 export async function moveAssetTransactions(
-  userId: string,
+  profileId: string,
   assetId: string,
   fromWalletId: string,
   toWalletId: string,
@@ -106,28 +106,28 @@ export async function moveAssetTransactions(
   if (fromWalletId === toWalletId) return false;
 
   const [fromWallet, toWallet, asset] = await Promise.all([
-    prisma.wallet.findFirst({ where: { id: fromWalletId, userId } }),
-    prisma.wallet.findFirst({ where: { id: toWalletId, userId } }),
-    prisma.asset.findFirst({ where: { id: assetId, userId } }),
+    prisma.wallet.findFirst({ where: { id: fromWalletId, profileId } }),
+    prisma.wallet.findFirst({ where: { id: toWalletId, profileId } }),
+    prisma.asset.findFirst({ where: { id: assetId, profileId } }),
   ]);
   if (!fromWallet || !toWallet || !asset) return false;
 
   await prisma.transaction.updateMany({
-    where: { assetId, walletId: fromWalletId, wallet: { userId } },
+    where: { assetId, walletId: fromWalletId, wallet: { profileId } },
     data: { walletId: toWalletId },
   });
   return true;
 }
 
-// Deletes many transactions at once. Scoped through the wallet so a user
-// can only ever delete their own. Returns the number actually deleted.
+// Deletes many transactions at once. Scoped through the wallet so the
+// profile can only ever delete its own. Returns the number actually deleted.
 export async function deleteTransactionsBulk(
-  userId: string,
+  profileId: string,
   ids: string[],
 ): Promise<number> {
   if (ids.length === 0) return 0;
   const result = await prisma.transaction.deleteMany({
-    where: { id: { in: ids }, wallet: { userId } },
+    where: { id: { in: ids }, wallet: { profileId } },
   });
   return result.count;
 }
@@ -143,15 +143,15 @@ export type BulkTransactionRow = {
 };
 
 // Inserts many transactions at once into a single wallet/asset pair.
-// Returns the inserted count, or null if the wallet or asset isn't the
-// user's.
+// Returns the inserted count, or null if the wallet or asset isn't this
+// profile's.
 export async function createTransactionsBulk(
-  userId: string,
+  profileId: string,
   walletId: string,
   assetId: string,
   rows: BulkTransactionRow[],
 ): Promise<number | null> {
-  if (!(await assertOwnership(userId, walletId, assetId))) {
+  if (!(await assertOwnership(profileId, walletId, assetId))) {
     return null;
   }
   const result = await prisma.transaction.createMany({
@@ -163,9 +163,9 @@ export async function createTransactionsBulk(
 // Inserts many transactions at once, each carrying its own wallet and
 // asset (used by the broker-file imports, which route transactions to
 // different wallets by asset class). Returns the inserted count, or null
-// if any wallet or asset isn't the user's.
+// if any wallet or asset isn't this profile's.
 export async function createBulkTransactions(
-  userId: string,
+  profileId: string,
   rows: (BulkTransactionRow & { walletId: string; assetId: string })[],
 ): Promise<number | null> {
   if (rows.length === 0) return 0;
@@ -173,8 +173,8 @@ export async function createBulkTransactions(
   const walletIds = [...new Set(rows.map((row) => row.walletId))];
   const assetIds = [...new Set(rows.map((row) => row.assetId))];
   const [ownedWallets, ownedAssets] = await Promise.all([
-    prisma.wallet.count({ where: { id: { in: walletIds }, userId } }),
-    prisma.asset.count({ where: { id: { in: assetIds }, userId } }),
+    prisma.wallet.count({ where: { id: { in: walletIds }, profileId } }),
+    prisma.asset.count({ where: { id: { in: assetIds }, profileId } }),
   ]);
   if (
     ownedWallets !== walletIds.length ||

@@ -25,13 +25,35 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  wallets            Wallet[]
-  assets             Asset[]
-  snapshots          PortfolioSnapshot[]
-  taxAdjustments     TaxAdjustment[]
-  priceAlerts        PriceAlert[]
+  profiles Profile[]
+}
+
+// A portfolio "owner" under a single login — typically the user themself,
+// but also lets one login track a child's or partner's portfolio in
+// isolation. Every data-bearing entity (wallets, assets, documents…)
+// hangs off a Profile rather than the User directly. The active profile
+// is held in a cookie; switching it scopes the whole app to that profile.
+model Profile {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  // True for the profile auto-created when the account is created. Used
+  // as the default active profile and protected from deletion when it's
+  // the only one left.
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallets             Wallet[]
+  assets              Asset[]
+  snapshots           PortfolioSnapshot[]
+  taxAdjustments      TaxAdjustment[]
+  priceAlerts         PriceAlert[]
   realizedGainEntries RealizedGainEntry[]
-  documents          Document[]
+  documents           Document[]
+
+  @@index([userId])
 }
 
 // A stored file in the document vault — bank statements, broker exports,
@@ -40,8 +62,8 @@ model User {
 // at rest) and are only ever served back through an authenticated route.
 model Document {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   name      String // original file name
   mimeType  String
   size      Int // bytes
@@ -51,27 +73,27 @@ model Document {
   content   Bytes // the file itself
   createdAt DateTime @default(now())
 
-  @@index([userId])
+  @@index([profileId])
 }
 
 // User-entered figures the app can't derive — currently the
 // carry-forward capital losses from previous years, per tax year.
 model TaxAdjustment {
   id               String   @id @default(cuid())
-  userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId        String
+  profile          Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   year             Int
   carryForwardLoss Decimal  @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  @@unique([userId, year])
+  @@unique([profileId, year])
 }
 
 model Wallet {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   name      String
   type      String // CTO | PEA | CRYPTO | LIVRET | OTHER
   currency  String   @default("EUR") // reference currency of the wallet
@@ -89,7 +111,7 @@ model Wallet {
   snapshots          PortfolioSnapshot[]
   realizedGainEntries RealizedGainEntry[]
 
-  @@index([userId])
+  @@index([profileId])
 }
 
 // A pre-computed realised gain/loss line from a bank's tax statement
@@ -98,8 +120,8 @@ model Wallet {
 // figure rather than reconstructed from transactions.
 model RealizedGainEntry {
   id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   walletId     String?
   wallet       Wallet?  @relation(fields: [walletId], references: [id], onDelete: SetNull)
   year         Int
@@ -111,7 +133,7 @@ model RealizedGainEntry {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([userId])
+  @@index([profileId])
   @@index([walletId])
 }
 
@@ -133,8 +155,8 @@ model CashMovement {
 
 model Asset {
   id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId     String
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   symbol        String // internal ticker / identifier
   name          String
   type          String // STOCK | ETF | CRYPTO
@@ -150,8 +172,8 @@ model Asset {
   priceAlerts  PriceAlert[]
   price        PriceCache?
 
-  @@unique([userId, symbol, type])
-  @@index([userId])
+  @@unique([profileId, symbol, type])
+  @@index([profileId])
 }
 
 // A user-defined price threshold for an asset. Evaluated on every dashboard
@@ -159,8 +181,8 @@ model Asset {
 // the alert surfaces as a banner on the dashboard.
 model PriceAlert {
   id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId   String
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   assetId     String
   asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
   direction   String // ABOVE | BELOW
@@ -170,7 +192,7 @@ model PriceAlert {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@index([userId])
+  @@index([profileId])
   @@index([assetId])
 }
 
@@ -241,11 +263,11 @@ model FxRate {
 }
 
 // Daily snapshot of portfolio value, feeding the historical performance chart.
-// walletId null = snapshot across all wallets for the user.
+// walletId null = snapshot across all wallets for the profile.
 model PortfolioSnapshot {
   id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId     String
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   walletId      String?
   wallet        Wallet?  @relation(fields: [walletId], references: [id], onDelete: Cascade)
   date          DateTime
@@ -254,6 +276,6 @@ model PortfolioSnapshot {
   currency      String   @default("EUR")
   createdAt     DateTime @default(now())
 
-  @@unique([userId, walletId, date])
-  @@index([userId, date])
+  @@unique([profileId, walletId, date])
+  @@index([profileId, date])
 }

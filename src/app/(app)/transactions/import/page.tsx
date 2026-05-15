@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth-server";
-import { getUserWallets } from "@/lib/wallets";
-import { getUserAssets } from "@/lib/assets";
-import { getUserRealizedGainEntries } from "@/lib/realized-gains";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileWallets } from "@/lib/wallets";
+import { getProfileAssets } from "@/lib/assets";
+import { getProfileRealizedGainEntries } from "@/lib/realized-gains";
 import { ui } from "@/lib/ui";
 import { MultiImport } from "@/components/multi-import";
 import { CmcImport } from "@/components/cmc-import";
@@ -14,11 +14,11 @@ import { TransactionImport } from "@/components/transaction-import";
 import { RealizedGainImport } from "@/components/realized-gain-import";
 
 export default async function TransactionImportPage() {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const [wallets, assets, realizedEntries] = await Promise.all([
-    getUserWallets(user.id),
-    getUserAssets(user.id),
-    getUserRealizedGainEntries(user.id),
+    getProfileWallets(profile.id),
+    getProfileAssets(profile.id),
+    getProfileRealizedGainEntries(profile.id),
   ]);
 
   const walletOptions = wallets.map((w) => ({

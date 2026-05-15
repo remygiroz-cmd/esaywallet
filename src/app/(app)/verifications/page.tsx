@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { loadReviewItems, type ReviewSeverity } from "@/lib/review";
 import { ui } from "@/lib/ui";
 
@@ -28,8 +28,8 @@ const SEVERITY_STYLE: Record<
 };
 
 export default async function VerificationsPage() {
-  const user = await requireUser();
-  const items = await loadReviewItems(user.id);
+  const { profile } = await requireProfile();
+  const items = await loadReviewItems(profile.id);
 
   const counts = {
     error: items.filter((i) => i.severity === "error").length,

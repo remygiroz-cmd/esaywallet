@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth-server";
+import { getCurrentSession } from "@/lib/auth-server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +12,9 @@ function csvField(value: string | number): string {
 // Full data export: a JSON backup of everything, or a flat CSV of the
 // transactions. Both download as a file via Content-Disposition.
 export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
+  const session = await getCurrentSession();
+  const profile = session?.profile;
+  if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
@@ -22,15 +23,15 @@ export async function GET(request: NextRequest) {
 
   const [wallets, assets, transactions, taxAdjustments] = await Promise.all([
     prisma.wallet.findMany({
-      where: { userId: user.id },
+      where: { profileId: profile!.id },
       orderBy: { createdAt: "asc" },
     }),
     prisma.asset.findMany({
-      where: { userId: user.id },
+      where: { profileId: profile!.id },
       orderBy: { name: "asc" },
     }),
     prisma.transaction.findMany({
-      where: { wallet: { userId: user.id } },
+      where: { wallet: { profileId: profile!.id } },
       orderBy: { executedAt: "asc" },
       include: {
         wallet: { select: { name: true, currency: true } },
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       },
     }),
     prisma.taxAdjustment.findMany({
-      where: { userId: user.id },
+      where: { profileId: profile!.id },
       orderBy: { year: "asc" },
     }),
   ]);

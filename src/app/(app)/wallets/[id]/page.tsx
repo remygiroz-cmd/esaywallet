@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { getWallet } from "@/lib/wallets";
 import { getWalletTransactions } from "@/lib/transactions";
 import { getWalletCashMovements, getCashByWallet } from "@/lib/cash";
@@ -27,15 +27,15 @@ export default async function WalletDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await requireUser();
-  const wallet = await getWallet(id, user.id);
+  const { profile } = await requireProfile();
+  const wallet = await getWallet(id, profile.id);
 
   if (!wallet) notFound();
 
   const [transactions, cashMovements, cashByWallet] = await Promise.all([
-    getWalletTransactions(wallet.id, user.id),
-    getWalletCashMovements(wallet.id, user.id),
-    getCashByWallet(user.id),
+    getWalletTransactions(wallet.id, profile.id),
+    getWalletCashMovements(wallet.id, profile.id),
+    getCashByWallet(profile.id),
   ]);
   const cashBalance = cashByWallet.get(wallet.id) ?? 0;
 

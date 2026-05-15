@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/assistant-fiscal", label: "Assistant fiscal" },
   { href: "/verifications", label: "Vérifications" },
   { href: "/documents", label: "Documents" },
+  { href: "/profils", label: "Profils" },
 ];
 
 export function AppNav() {

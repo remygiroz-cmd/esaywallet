@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth-server";
+import { requireProfile } from "@/lib/auth-server";
 import { getAsset } from "@/lib/assets";
 import { ASSET_TYPE_LABELS, type AssetType } from "@/lib/constants";
 import { ui } from "@/lib/ui";
@@ -14,8 +14,8 @@ export default async function AssetDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await requireUser();
-  const asset = await getAsset(id, user.id);
+  const { profile } = await requireProfile();
+  const asset = await getAsset(id, profile.id);
 
   if (!asset) notFound();
 

@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/auth-server";
-import { getUserWallets } from "@/lib/wallets";
-import { getUserAssets } from "@/lib/assets";
-import { getUserIncome } from "@/lib/income";
+import { requireProfile } from "@/lib/auth-server";
+import { getProfileWallets } from "@/lib/wallets";
+import { getProfileAssets } from "@/lib/assets";
+import { getProfileIncome } from "@/lib/income";
 import { INCOME_KIND_LABELS, type IncomeKind } from "@/lib/constants";
 import { ui } from "@/lib/ui";
 import { formatCurrency, formatDate, toDateInputValue } from "@/lib/format";
@@ -10,11 +10,11 @@ import { DeleteButton } from "@/components/delete-button";
 import { deleteIncomeAction } from "./actions";
 
 export default async function RevenusPage() {
-  const user = await requireUser();
+  const { profile } = await requireProfile();
   const [wallets, assets, income] = await Promise.all([
-    getUserWallets(user.id),
-    getUserAssets(user.id),
-    getUserIncome(user.id),
+    getProfileWallets(profile.id),
+    getProfileAssets(profile.id),
+    getProfileIncome(profile.id),
   ]);
 
   const totalsByCurrency = new Map<string, number>();
