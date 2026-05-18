@@ -111,7 +111,8 @@ export type AssetComputation = {
   quoteCurrency: string;
   totalQuantity: number; // open quantity still held
   avgCost: number; // reference currency, per unit (PMP)
-  avgBuyPrice: number; // quote currency — weighted average purchase price
+  avgCostEur: number | null; // per unit, converted to EUR at the current FX
+  avgCostUsd: number | null; // per unit, converted to USD at the current FX
   totalCost: number; // reference currency, open position
   currentValue: number; // reference currency
   gain: number; // reference currency, unrealised
@@ -283,6 +284,7 @@ export function computePortfolio(
     priceByAsset,
     toReference,
     fx,
+    referenceCurrency,
   );
 
   let totalCost = 0;
@@ -571,6 +573,7 @@ function aggregateAssets(
   priceByAsset: Map<string, PortfolioInput["prices"][number]>,
   toReference: (amount: number, from: string) => number,
   fx: ReturnType<typeof buildFxRateMap>,
+  referenceCurrency: string,
 ): AssetComputation[] {
   return assets
     .map((asset) => {
@@ -623,15 +626,7 @@ function aggregateAssets(
         ),
       ];
 
-      // Weighted-average purchase price, in the asset's quote currency.
-      let buyQuantity = 0;
-      let buyPriceWeighted = 0;
-      for (const lot of lots) {
-        buyQuantity += lot.quantity;
-        buyPriceWeighted += lot.unitPrice * lot.quantity;
-      }
-      const avgBuyPrice =
-        buyQuantity > 0 ? buyPriceWeighted / buyQuantity : 0;
+      const avgCost = totalQuantity > 0 ? totalCost / totalQuantity : 0;
 
       return {
         assetId: asset.id,
@@ -640,8 +635,15 @@ function aggregateAssets(
         type: asset.type,
         quoteCurrency: asset.quoteCurrency,
         totalQuantity,
-        avgCost: totalQuantity > 0 ? totalCost / totalQuantity : 0,
-        avgBuyPrice,
+        avgCost,
+        avgCostEur:
+          avgCost > 0
+            ? convertCurrency(avgCost, referenceCurrency, "EUR", fx)
+            : null,
+        avgCostUsd:
+          avgCost > 0
+            ? convertCurrency(avgCost, referenceCurrency, "USD", fx)
+            : null,
         totalCost,
         currentValue,
         gain,

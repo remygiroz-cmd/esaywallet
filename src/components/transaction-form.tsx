@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   createTransactionAction,
   updateTransactionAction,
@@ -41,11 +42,38 @@ type TransactionValues = {
   notes: string | null;
 };
 
+// Initial values used when creating a transaction from a non-default
+// source (e.g. an extracted screenshot). When `newAsset` is set, the form
+// opens with the "new asset" panel pre-filled; when `assetId` is set, the
+// existing asset is pre-selected.
+export type TransactionPrefill = {
+  type?: "BUY" | "SELL";
+  walletId?: string;
+  assetId?: string;
+  newAsset?: {
+    name: string;
+    symbol: string;
+    type: string;
+    quoteCurrency: string;
+  };
+  executedAt?: string;
+  unitPrice?: number;
+  quantity?: number;
+  amountInvested?: number;
+  fees?: number;
+  notes?: string;
+};
+
 type TransactionFormProps = {
   wallets: WalletOption[];
   assets: AssetOption[];
   defaultDate: string;
   transaction?: TransactionValues;
+  prefill?: TransactionPrefill;
+  // When provided, the user is navigated here after a successful create.
+  // Useful for one-shot flows (screenshot import) that don't want the
+  // form to remount on the same page.
+  redirectTo?: string;
 };
 
 const NEW_ASSET = "__new__";
@@ -57,6 +85,13 @@ export function TransactionForm(props: TransactionFormProps) {
     editing ? updateTransactionAction : createTransactionAction,
     initialState,
   );
+
+  const router = useRouter();
+  useEffect(() => {
+    if (state.ok && props.redirectTo) {
+      router.push(props.redirectTo);
+    }
+  }, [state.ok, state.submittedAt, props.redirectTo, router]);
 
   return (
     // After a successful create the action returns a fresh `submittedAt`,
@@ -77,6 +112,7 @@ function TransactionFormBody({
   assets,
   defaultDate,
   transaction,
+  prefill,
   editing,
   formAction,
   pending,
@@ -87,14 +123,26 @@ function TransactionFormBody({
   pending: boolean;
   error?: string;
 }) {
-  const [txType, setTxType] = useState(transaction?.type ?? "BUY");
+  const [txType, setTxType] = useState(
+    transaction?.type ?? prefill?.type ?? "BUY",
+  );
+  // Prefill drives the initial asset choice: an explicit asset id wins,
+  // otherwise a non-empty newAsset opens the inline creation panel.
   const defaultAssetSelection =
-    transaction?.assetId ?? (assets.length > 0 ? assets[0].id : NEW_ASSET);
+    transaction?.assetId ??
+    prefill?.assetId ??
+    (prefill?.newAsset ? NEW_ASSET : assets.length > 0 ? assets[0].id : NEW_ASSET);
   const [assetSelection, setAssetSelection] = useState(defaultAssetSelection);
-  const [newAssetName, setNewAssetName] = useState("");
-  const [newAssetSymbol, setNewAssetSymbol] = useState("");
-  const [newAssetType, setNewAssetType] = useState("STOCK");
-  const [newAssetQuoteCurrency, setNewAssetQuoteCurrency] = useState("EUR");
+  const [newAssetName, setNewAssetName] = useState(prefill?.newAsset?.name ?? "");
+  const [newAssetSymbol, setNewAssetSymbol] = useState(
+    prefill?.newAsset?.symbol ?? "",
+  );
+  const [newAssetType, setNewAssetType] = useState(
+    prefill?.newAsset?.type ?? "STOCK",
+  );
+  const [newAssetQuoteCurrency, setNewAssetQuoteCurrency] = useState(
+    prefill?.newAsset?.quoteCurrency ?? "EUR",
+  );
   const [newAssetExternalId, setNewAssetExternalId] = useState("");
 
   const isSell = txType === "SELL";
@@ -154,7 +202,9 @@ function TransactionFormBody({
           <select
             name="walletId"
             required
-            defaultValue={transaction?.walletId ?? wallets[0]?.id ?? ""}
+            defaultValue={
+              transaction?.walletId ?? prefill?.walletId ?? wallets[0]?.id ?? ""
+            }
             className={ui.input}
           >
             {wallets.map((wallet) => (
@@ -293,7 +343,9 @@ function TransactionFormBody({
             name="executedAt"
             type="date"
             required
-            defaultValue={transaction?.executedAt ?? defaultDate}
+            defaultValue={
+              transaction?.executedAt ?? prefill?.executedAt ?? defaultDate
+            }
             className={ui.input}
           />
         </label>
@@ -305,7 +357,7 @@ function TransactionFormBody({
             step="any"
             min="0"
             required
-            defaultValue={transaction?.unitPrice}
+            defaultValue={transaction?.unitPrice ?? prefill?.unitPrice}
             placeholder="0.00"
             className={ui.input}
           />
@@ -321,7 +373,7 @@ function TransactionFormBody({
             step="any"
             min="0"
             required
-            defaultValue={transaction?.quantity}
+            defaultValue={transaction?.quantity ?? prefill?.quantity}
             placeholder="0"
             className={ui.input}
           />
@@ -334,7 +386,9 @@ function TransactionFormBody({
             step="any"
             min="0"
             required
-            defaultValue={transaction?.amountInvested}
+            defaultValue={
+              transaction?.amountInvested ?? prefill?.amountInvested
+            }
             placeholder="0.00"
             className={ui.input}
           />
@@ -351,7 +405,7 @@ function TransactionFormBody({
             type="number"
             step="any"
             min="0"
-            defaultValue={transaction?.fees ?? 0}
+            defaultValue={transaction?.fees ?? prefill?.fees ?? 0}
             placeholder="0.00"
             className={ui.input}
           />
@@ -383,7 +437,7 @@ function TransactionFormBody({
           name="notes"
           maxLength={280}
           rows={2}
-          defaultValue={transaction?.notes ?? ""}
+          defaultValue={transaction?.notes ?? prefill?.notes ?? ""}
           className={ui.input}
         />
       </label>

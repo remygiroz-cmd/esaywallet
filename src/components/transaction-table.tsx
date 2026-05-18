@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import {
   deleteTransactionsBulkAction,
   type BulkDeleteState,
@@ -23,6 +23,9 @@ export type TransactionRow = {
   amountInvested: number;
   walletCurrency: string;
 };
+
+type SortKey = "date" | "asset" | "wallet" | "amount";
+type SortDirection = "asc" | "desc";
 
 const initialState: BulkDeleteState = {};
 
@@ -63,6 +66,30 @@ function TransactionTableBody({
   pending: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Default: most recent first — matches the server-side query order.
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const sortedRows = useMemo(() => {
+    const dir = sortDirection === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const primary = compareBy(a, b, sortKey);
+      if (primary !== 0) return primary * dir;
+      // Stable tiebreaker so visually identical rows keep their newest-first order.
+      return compareBy(a, b, "date") * -1;
+    });
+  }, [rows, sortKey, sortDirection]);
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      // First click on the date column defaults to newest-first; other
+      // columns default to ascending (A→Z, smallest→largest).
+      setSortDirection(key === "date" ? "desc" : "asc");
+    }
+  }
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -130,22 +157,47 @@ function TransactionTableBody({
                   className="align-middle"
                 />
               </th>
-              <th className="px-4 py-3 font-medium">Date</th>
+              <SortableHeader
+                label="Date"
+                columnKey="date"
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
               <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium">Asset</th>
+              <SortableHeader
+                label="Asset"
+                columnKey="asset"
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+              />
               {showWallet ? (
-                <th className="px-4 py-3 font-medium">Wallet</th>
+                <SortableHeader
+                  label="Wallet"
+                  columnKey="wallet"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
               ) : null}
               <th className="px-4 py-3 text-right font-medium">Quantité</th>
               <th className="px-4 py-3 text-right font-medium">
                 Prix unitaire
               </th>
-              <th className="px-4 py-3 text-right font-medium">Montant</th>
+              <SortableHeader
+                label="Montant"
+                columnKey="amount"
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                align="right"
+              />
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {sortedRows.map((row) => (
               <tr
                 key={row.id}
                 className={`border-b border-black/[.05] last:border-0 dark:border-white/[.06] ${
@@ -205,5 +257,61 @@ function TransactionTableBody({
         </table>
       </div>
     </form>
+  );
+}
+
+function compareBy(a: TransactionRow, b: TransactionRow, key: SortKey): number {
+  switch (key) {
+    case "date":
+      return a.executedAt.localeCompare(b.executedAt);
+    case "asset":
+      return a.assetName.localeCompare(b.assetName, "fr", {
+        sensitivity: "base",
+      });
+    case "wallet":
+      return a.walletName.localeCompare(b.walletName, "fr", {
+        sensitivity: "base",
+      });
+    case "amount":
+      return a.amountInvested - b.amountInvested;
+  }
+}
+
+function SortableHeader({
+  label,
+  columnKey,
+  sortKey,
+  sortDirection,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  columnKey: SortKey;
+  sortKey: SortKey;
+  sortDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = columnKey === sortKey;
+  const arrow = !active ? "↕" : sortDirection === "asc" ? "↑" : "↓";
+  return (
+    <th className={`px-4 py-3 font-medium ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => onSort(columnKey)}
+        className={`inline-flex items-center gap-1 uppercase tracking-wide transition-colors hover:text-emerald-600 dark:hover:text-emerald-400 ${
+          active ? "text-emerald-700 dark:text-emerald-300" : ""
+        }`}
+        aria-label={`Trier par ${label}`}
+      >
+        <span>{label}</span>
+        <span
+          aria-hidden
+          className={`text-[0.7rem] ${active ? "" : "text-zinc-300 dark:text-zinc-600"}`}
+        >
+          {arrow}
+        </span>
+      </button>
+    </th>
   );
 }

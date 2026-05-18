@@ -43,9 +43,14 @@ export default async function TransactionsPage() {
             quantité reçue.
           </p>
         </div>
-        <Link href="/transactions/import" className={ui.secondaryButton}>
-          Import en masse
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/transactions/screenshot" className={ui.secondaryButton}>
+            Import par capture
+          </Link>
+          <Link href="/transactions/import" className={ui.secondaryButton}>
+            Import en masse
+          </Link>
+        </div>
       </header>
 
       {wallets.length === 0 ? (
