@@ -585,8 +585,15 @@ function AssetRow({
               ? formatCurrency(asset.currentPriceEur, "EUR")
               : "—"}
           </p>
+          {asset.currentPriceUsd !== null ? (
+            <p className="text-xs tabular-nums text-zinc-400">
+              {formatCurrency(asset.currentPriceUsd, "USD")}
+            </p>
+          ) : null}
           {asset.dailyChangePct !== null ? (
-            <DailyChange pct={asset.dailyChangePct} />
+            <div className="mt-0.5">
+              <DailyChange pct={asset.dailyChangePct} />
+            </div>
           ) : null}
         </div>
 
