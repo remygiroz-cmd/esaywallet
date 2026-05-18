@@ -164,25 +164,6 @@ export function DashboardLive({
         />
       ) : (
         <>
-          {refresh.errors.length > 0 || portfolio.hasMissingPrice ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/60 dark:text-amber-200">
-              <p className="font-medium">
-                Certains prix n&apos;ont pas pu être récupérés.
-              </p>
-              <p className="mt-0.5 text-amber-700 dark:text-amber-300">
-                Les lignes concernées sont considérées comme stables.
-                Vérifiez les identifiants externes sur la page Assets.
-              </p>
-              {refresh.errors.length > 0 ? (
-                <ul className="mt-2 list-disc pl-5 text-xs text-amber-700 dark:text-amber-300">
-                  {refresh.errors.slice(0, 5).map((error, index) => (
-                    <li key={index}>{error}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-
           <HeroSummary portfolio={portfolio} income={income} />
 
           <AllocationSection
@@ -218,6 +199,17 @@ export function DashboardLive({
             selectedWalletId={selectedWalletId}
             onSelectWallet={setSelectedWalletId}
           />
+
+          {refresh.errors.length > 0 || portfolio.hasMissingPrice ? (
+            <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+              Certains prix n&apos;ont pas pu être récupérés. Les lignes
+              concernées sont considérées comme stables — vérifiez les
+              identifiants externes sur la page Assets si besoin.
+              {refresh.errors.length > 0
+                ? ` (${refresh.errors.length} erreur${refresh.errors.length === 1 ? "" : "s"})`
+                : ""}
+            </p>
+          ) : null}
         </>
       )}
     </div>
