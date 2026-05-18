@@ -396,11 +396,11 @@ function HeroSummary({
   return (
     <div className="overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-6 shadow-sm dark:border-emerald-900/40 dark:from-emerald-950/30 dark:via-zinc-950 dark:to-cyan-950/30 sm:p-8">
       <p className="text-xs font-medium uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
-        Patrimoine total
+        Valeur du portefeuille
       </p>
       <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-3">
         <p className="text-4xl font-bold tracking-tight text-black tabular-nums dark:text-zinc-50 sm:text-5xl">
-          {formatCurrency(portfolio.totalValue, ccy)}
+          {formatCurrency(portfolio.currentValue, ccy)}
         </p>
         <GainBadge
           gain={portfolio.gain}
