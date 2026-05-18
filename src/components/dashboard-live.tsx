@@ -26,6 +26,7 @@ import {
   formatPercent,
 } from "@/lib/format";
 import { ui } from "@/lib/ui";
+import { AssetIcon } from "./asset-icon";
 import { GainBadge } from "./gain-badge";
 import { PortfolioChart } from "./portfolio-chart";
 import { AssetPriceChart } from "./asset-price-chart";
@@ -182,15 +183,7 @@ export function DashboardLive({
             </div>
           ) : null}
 
-          <GlobalSummary portfolio={portfolio} />
-
-          {portfolio.realizedGain !== 0 || portfolio.estimatedTax > 0 ? (
-            <RealizedSummary portfolio={portfolio} />
-          ) : null}
-
-          {Object.keys(income).length > 0 ? (
-            <IncomeSummary income={income} />
-          ) : null}
+          <HeroSummary portfolio={portfolio} income={income} />
 
           <AllocationSection
             wallets={portfolio.wallets}
@@ -336,119 +329,157 @@ function EmptyState({
   );
 }
 
-function GlobalSummary({ portfolio }: { portfolio: PortfolioComputation }) {
-  const currency = portfolio.referenceCurrency;
+type Tile = {
+  label: string;
+  value: string;
+  tone?: "neutral" | "positive" | "negative";
+};
+
+// One pillar card replacing the old Global / Realized / Income trio: a
+// big "Patrimoine total" headline + a colourful gain pill on top, then
+// a responsive grid of small stat tiles below. Only the figures that
+// actually have a value show up, so the card stays uncluttered for
+// people with simple portfolios.
+function HeroSummary({
+  portfolio,
+  income,
+}: {
+  portfolio: PortfolioComputation;
+  income: Record<string, number>;
+}) {
+  const ccy = portfolio.referenceCurrency;
+  const tiles: Tile[] = [];
+
+  if (portfolio.totalCost > 0) {
+    tiles.push({
+      label: "Total investi",
+      value: formatCurrency(portfolio.totalCost, ccy),
+    });
+  }
+  if (portfolio.annualizedReturn !== null) {
+    tiles.push({
+      label: "TRI annualisé",
+      value: formatPercent(portfolio.annualizedReturn),
+      tone: portfolio.annualizedReturn >= 0 ? "positive" : "negative",
+    });
+  }
+  if (portfolio.realizedGain !== 0) {
+    tiles.push({
+      label: "Réalisé",
+      value: formatSignedCurrency(portfolio.realizedGain, ccy),
+      tone: portfolio.realizedGain >= 0 ? "positive" : "negative",
+    });
+  }
+  if (portfolio.estimatedTax > 0) {
+    tiles.push({
+      label: "Impôt estimé",
+      value: formatCurrency(portfolio.estimatedTax, ccy),
+    });
+  }
+  if (portfolio.cashBalance !== 0) {
+    tiles.push({
+      label: "Espèces",
+      value: formatCurrency(portfolio.cashBalance, ccy),
+    });
+  }
+  const incomeEntries = Object.entries(income);
+  if (incomeEntries.length > 0) {
+    tiles.push({
+      label: "Revenus perçus",
+      value: incomeEntries
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(" + "),
+      tone: "positive",
+    });
+  }
+
   return (
-    <div className="rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.12] dark:bg-zinc-950">
-      <p className="text-xs font-medium uppercase tracking-widest text-zinc-400">
-        Patrimoine global
+    <div className="overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-6 shadow-sm dark:border-emerald-900/40 dark:from-emerald-950/30 dark:via-zinc-950 dark:to-cyan-950/30 sm:p-8">
+      <p className="text-xs font-medium uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+        Patrimoine total
       </p>
-      <div className="mt-2 flex flex-wrap items-end gap-x-10 gap-y-4">
-        <div>
-          <p className="text-3xl font-semibold tracking-tight text-black tabular-nums dark:text-zinc-50">
-            {formatCurrency(portfolio.currentValue, currency)}
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Valeur actuelle
-          </p>
-        </div>
-        <div>
-          <GainBadge
-            gain={portfolio.gain}
-            gainPct={portfolio.gainPct}
-            currency={currency}
-            size="lg"
-          />
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Plus / moins-value
-          </p>
-        </div>
-        <div>
-          <p className="text-base font-medium text-zinc-600 tabular-nums dark:text-zinc-300">
-            {formatCurrency(portfolio.totalCost, currency)}
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Total investi
-          </p>
-        </div>
-        {portfolio.cashBalance !== 0 ? (
-          <>
-            <div>
-              <p className="text-base font-medium text-zinc-600 tabular-nums dark:text-zinc-300">
-                {formatCurrency(portfolio.cashBalance, currency)}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Espèces disponibles
-              </p>
-            </div>
-            <div>
-              <p className="text-base font-semibold text-black tabular-nums dark:text-zinc-50">
-                {formatCurrency(portfolio.totalValue, currency)}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Patrimoine total (titres + espèces)
-              </p>
-            </div>
-          </>
-        ) : null}
-        {portfolio.annualizedReturn !== null ? (
-          <div>
-            <p
-              className={`text-base font-semibold tabular-nums ${
-                portfolio.annualizedReturn >= 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-red-600 dark:text-red-400"
-              }`}
-            >
-              {formatPercent(portfolio.annualizedReturn)}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              TRI annualisé
-            </p>
-          </div>
-        ) : null}
+      <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-3">
+        <p className="text-4xl font-bold tracking-tight text-black tabular-nums dark:text-zinc-50 sm:text-5xl">
+          {formatCurrency(portfolio.totalValue, ccy)}
+        </p>
+        <GainBadge
+          gain={portfolio.gain}
+          gainPct={portfolio.gainPct}
+          currency={ccy}
+          size="lg"
+        />
       </div>
+
+      {tiles.length > 0 ? (
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {tiles.map((tile, index) => (
+            <StatTile key={index} {...tile} />
+          ))}
+        </div>
+      ) : null}
+
+      {portfolio.realizedGain !== 0 || portfolio.estimatedTax > 0 ? (
+        <p className="mt-4 text-xs text-zinc-400">
+          PFU indicatif (30 % CTO/crypto, 17,2 % PEA). À ajuster à votre
+          situation réelle sur la page Fiscalité.
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function RealizedSummary({ portfolio }: { portfolio: PortfolioComputation }) {
-  const currency = portfolio.referenceCurrency;
+function StatTile({ label, value, tone = "neutral" }: Tile) {
+  const valueClass =
+    tone === "positive"
+      ? "text-emerald-700 dark:text-emerald-400"
+      : tone === "negative"
+        ? "text-red-700 dark:text-red-400"
+        : "text-zinc-800 dark:text-zinc-100";
   return (
-    <div className="rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.12] dark:bg-zinc-950">
-      <p className="text-xs font-medium uppercase tracking-widest text-zinc-400">
-        Réalisé &amp; fiscalité
+    <div className="rounded-2xl border border-black/[.05] bg-white/70 p-3 backdrop-blur-sm dark:border-white/[.06] dark:bg-zinc-950/60">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        {label}
       </p>
-      <div className="mt-2 flex flex-wrap items-end gap-x-10 gap-y-4">
-        <div>
-          <p
-            className={`text-2xl font-semibold tabular-nums ${
-              portfolio.realizedGain >= 0
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400"
-            }`}
-          >
-            {formatSignedCurrency(portfolio.realizedGain, currency)}
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Plus / moins-value réalisée
-          </p>
-        </div>
-        <div>
-          <p className="text-base font-medium text-zinc-600 tabular-nums dark:text-zinc-300">
-            {formatCurrency(portfolio.estimatedTax, currency)}
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Impôt estimé
-          </p>
-        </div>
-      </div>
-      <p className="mt-3 text-xs text-zinc-400">
-        Estimation indicative (PFU 30 % en CTO/crypto, 17,2 % en PEA). La
-        fiscalité réelle dépend de votre situation et de la durée de
-        détention.
+      <p className={`mt-1 text-base font-semibold tabular-nums ${valueClass}`}>
+        {value}
       </p>
     </div>
+  );
+}
+
+const TYPE_BADGE_CLASS: Record<string, string> = {
+  CRYPTO:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+  STOCK: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+  ETF: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300",
+};
+
+function TypeBadge({ type }: { type: string }) {
+  const className =
+    TYPE_BADGE_CLASS[type] ??
+    "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300";
+  return (
+    <span
+      className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${className}`}
+    >
+      {ASSET_TYPE_LABELS[type as AssetType] ?? type}
+    </span>
+  );
+}
+
+function DailyChange({ pct }: { pct: number }) {
+  const positive = pct >= 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums ${
+        positive
+          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
+          : "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-400"
+      }`}
+    >
+      <span aria-hidden="true">{positive ? "▲" : "▼"}</span>
+      {formatPercent(Math.abs(pct))}
+    </span>
   );
 }
 
@@ -509,37 +540,6 @@ function AlertsBanner({
   );
 }
 
-function IncomeSummary({ income }: { income: Record<string, number> }) {
-  const entries = Object.entries(income);
-  return (
-    <div className="rounded-2xl border border-black/[.08] bg-white p-6 dark:border-white/[.12] dark:bg-zinc-950">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-zinc-400">
-          Revenus perçus
-        </p>
-        <Link
-          href="/revenus"
-          className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-        >
-          Gérer les revenus →
-        </Link>
-      </div>
-      <div className="mt-2 flex flex-wrap items-end gap-x-10 gap-y-4">
-        {entries.map(([currency, total]) => (
-          <div key={currency}>
-            <p className="text-2xl font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">
-              {formatCurrency(total, currency)}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Dividendes, coupons & intérêts ({currency})
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function AssetRow({
   asset,
   referenceCurrency,
@@ -554,54 +554,43 @@ function AssetRow({
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left sm:gap-4 sm:px-5 sm:py-4"
+        aria-expanded={expanded}
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="text-zinc-400">{expanded ? "▾" : "▸"}</span>
-          <div className="min-w-0">
-            <span className="font-semibold text-black dark:text-zinc-50">
+        <AssetIcon symbol={asset.symbol} type={asset.type} size={40} />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="truncate font-semibold text-black dark:text-zinc-50">
               {asset.name}
-            </span>{" "}
-            <span className="font-mono text-xs text-zinc-400">
-              {asset.symbol}
             </span>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              {ASSET_TYPE_LABELS[asset.type as AssetType] ?? asset.type} ·{" "}
-              {formatQuantity(asset.totalQuantity)} unité
-              {asset.totalQuantity > 1 ? "s" : ""}
-              {asset.avgBuyPrice > 0
-                ? ` · PRU ${formatCurrency(asset.avgBuyPrice, asset.quoteCurrency)}`
-                : ""}
-            </p>
+            <TypeBadge type={asset.type} />
           </div>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="font-mono">{asset.symbol}</span>
+            {" · "}
+            {formatQuantity(asset.totalQuantity)} unité
+            {asset.totalQuantity > 1 ? "s" : ""}
+            {asset.avgBuyPrice > 0
+              ? ` · PRU ${formatCurrency(asset.avgBuyPrice, asset.quoteCurrency)}`
+              : ""}
+          </p>
         </div>
 
-        {/* Current market price of the asset, in EUR and USD. */}
-        <div className="text-right sm:text-left">
+        {/* Live price + intra-day change — hidden on the narrowest screens
+            so the right-hand value/gain block stays readable. */}
+        <div className="hidden text-right sm:block">
           <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
             {asset.currentPriceEur !== null
               ? formatCurrency(asset.currentPriceEur, "EUR")
               : "—"}
           </p>
-          <p className="text-xs tabular-nums text-zinc-400">
-            {asset.currentPriceUsd !== null
-              ? formatCurrency(asset.currentPriceUsd, "USD")
-              : "—"}
-            {asset.dailyChangePct !== null ? (
-              <span
-                className={`ml-2 font-medium ${
-                  asset.dailyChangePct >= 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-red-600 dark:text-red-400"
-                }`}
-              >
-                {formatPercent(asset.dailyChangePct)} auj.
-              </span>
-            ) : null}
-          </p>
+          {asset.dailyChangePct !== null ? (
+            <DailyChange pct={asset.dailyChangePct} />
+          ) : null}
         </div>
 
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
             {formatCurrency(asset.currentValue, referenceCurrency)}
           </p>
@@ -618,6 +607,14 @@ function AssetRow({
             </p>
           ) : null}
         </div>
+
+        <span
+          className="ml-1 shrink-0 text-zinc-400 transition-transform"
+          aria-hidden="true"
+          style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+        >
+          ▸
+        </span>
       </button>
 
       {expanded ? (
