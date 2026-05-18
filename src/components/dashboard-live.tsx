@@ -546,15 +546,15 @@ function AssetRow({
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left sm:gap-4 sm:px-5 sm:py-4"
+        className="flex w-full flex-col gap-3 px-4 py-3 text-left sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-4"
         aria-expanded={expanded}
       >
-        <AssetIcon symbol={asset.symbol} type={asset.type} size={40} />
-
-        {/* Identity + (price / value) — stacked on mobile, side-by-side
-            on sm+ thanks to the `sm:contents` trick that unwraps the
-            grouping wrapper into flex siblings. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+        {/* Identity row. On mobile this is a self-contained row (icon +
+            name + symbol/qty/PRU). On sm+ the wrapper dissolves into the
+            outer flex so the layout becomes icon · identity · price ·
+            position · chevron in a single line. */}
+        <div className="flex items-center gap-3 sm:contents">
+          <AssetIcon symbol={asset.symbol} type={asset.type} size={40} />
           <div className="min-w-0 sm:flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="truncate font-semibold text-black dark:text-zinc-50">
@@ -580,59 +580,59 @@ function AssetRow({
               ) : null}
             </p>
           </div>
+        </div>
 
-          {/* Wrapper that splits price + value side-by-side on mobile
-              (justify-between), and dissolves into two separate flex
-              children on sm+ via sm:contents. */}
-          <div className="flex items-start justify-between gap-3 sm:contents">
-            {/* Live unit price */}
-            <div className="text-left sm:text-right">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:hidden">
-                Cours
+        {/* Bottom strip on mobile (2-col grid under a thin separator),
+            dissolves into the outer flex on sm+ so price and position
+            sit next to identity. */}
+        <div className="grid grid-cols-2 gap-3 border-t border-black/[.05] pt-3 dark:border-white/[.06] sm:contents sm:border-0 sm:p-0">
+          <div className="text-left sm:text-right">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:hidden">
+              Cours
+            </p>
+            <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
+              {asset.currentPriceEur !== null
+                ? formatCurrency(asset.currentPriceEur, "EUR")
+                : "—"}
+            </p>
+            {asset.currentPriceUsd !== null ? (
+              <p className="text-xs tabular-nums text-zinc-400">
+                {formatCurrency(asset.currentPriceUsd, "USD")}
               </p>
-              <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
-                {asset.currentPriceEur !== null
-                  ? formatCurrency(asset.currentPriceEur, "EUR")
-                  : "—"}
-              </p>
-              {asset.currentPriceUsd !== null ? (
-                <p className="text-xs tabular-nums text-zinc-400">
-                  {formatCurrency(asset.currentPriceUsd, "USD")}
-                </p>
-              ) : null}
-              {asset.dailyChangePct !== null ? (
-                <div className="mt-0.5">
-                  <DailyChange pct={asset.dailyChangePct} />
-                </div>
-              ) : null}
-            </div>
+            ) : null}
+            {asset.dailyChangePct !== null ? (
+              <div className="mt-0.5">
+                <DailyChange pct={asset.dailyChangePct} />
+              </div>
+            ) : null}
+          </div>
 
-            {/* Position value + gain */}
-            <div className="shrink-0 text-right">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:hidden">
-                Position
+          <div className="text-right">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:hidden">
+              Position
+            </p>
+            <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
+              {formatCurrency(asset.currentValue, referenceCurrency)}
+            </p>
+            <GainBadge
+              gain={asset.gain}
+              gainPct={asset.gainPct}
+              currency={referenceCurrency}
+              size="sm"
+            />
+            {asset.hasSales ? (
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                Réalisé :{" "}
+                {formatSignedCurrency(asset.realizedGain, referenceCurrency)}
               </p>
-              <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
-                {formatCurrency(asset.currentValue, referenceCurrency)}
-              </p>
-              <GainBadge
-                gain={asset.gain}
-                gainPct={asset.gainPct}
-                currency={referenceCurrency}
-                size="sm"
-              />
-              {asset.hasSales ? (
-                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  Réalisé :{" "}
-                  {formatSignedCurrency(asset.realizedGain, referenceCurrency)}
-                </p>
-              ) : null}
-            </div>
+            ) : null}
           </div>
         </div>
 
+        {/* Chevron — desktop only; on mobile the row's two-pane shape
+            is enough affordance that it's expandable. */}
         <span
-          className="ml-1 shrink-0 text-zinc-400 transition-transform"
+          className="hidden shrink-0 text-zinc-400 transition-transform sm:block"
           aria-hidden="true"
           style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
         >
