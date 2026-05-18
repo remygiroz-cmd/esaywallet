@@ -551,68 +551,84 @@ function AssetRow({
       >
         <AssetIcon symbol={asset.symbol} type={asset.type} size={40} />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="truncate font-semibold text-black dark:text-zinc-50">
-              {asset.name}
-            </span>
-            <TypeBadge type={asset.type} />
-          </div>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            <span className="font-mono">{asset.symbol}</span>
-            {" · "}
-            {formatQuantity(asset.totalQuantity)} unité
-            {asset.totalQuantity > 1 ? "s" : ""}
-            {asset.avgCost > 0 ? (
-              <>
-                {" · PRU "}
-                {asset.avgCostEur !== null
-                  ? formatCurrency(asset.avgCostEur, "EUR")
-                  : formatCurrency(asset.avgCost, asset.quoteCurrency)}
-                {asset.avgCostUsd !== null
-                  ? ` / ${formatCurrency(asset.avgCostUsd, "USD")}`
-                  : ""}
-              </>
-            ) : null}
-          </p>
-        </div>
-
-        {/* Live price + intra-day change — hidden on the narrowest screens
-            so the right-hand value/gain block stays readable. */}
-        <div className="hidden text-right sm:block">
-          <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
-            {asset.currentPriceEur !== null
-              ? formatCurrency(asset.currentPriceEur, "EUR")
-              : "—"}
-          </p>
-          {asset.currentPriceUsd !== null ? (
-            <p className="text-xs tabular-nums text-zinc-400">
-              {formatCurrency(asset.currentPriceUsd, "USD")}
-            </p>
-          ) : null}
-          {asset.dailyChangePct !== null ? (
-            <div className="mt-0.5">
-              <DailyChange pct={asset.dailyChangePct} />
+        {/* Identity + (price / value) — stacked on mobile, side-by-side
+            on sm+ thanks to the `sm:contents` trick that unwraps the
+            grouping wrapper into flex siblings. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+          <div className="min-w-0 sm:flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="truncate font-semibold text-black dark:text-zinc-50">
+                {asset.name}
+              </span>
+              <TypeBadge type={asset.type} />
             </div>
-          ) : null}
-        </div>
-
-        <div className="shrink-0 text-right">
-          <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
-            {formatCurrency(asset.currentValue, referenceCurrency)}
-          </p>
-          <GainBadge
-            gain={asset.gain}
-            gainPct={asset.gainPct}
-            currency={referenceCurrency}
-            size="sm"
-          />
-          {asset.hasSales ? (
             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              Réalisé :{" "}
-              {formatSignedCurrency(asset.realizedGain, referenceCurrency)}
+              <span className="font-mono">{asset.symbol}</span>
+              {" · "}
+              {formatQuantity(asset.totalQuantity)} unité
+              {asset.totalQuantity > 1 ? "s" : ""}
+              {asset.avgCost > 0 ? (
+                <>
+                  {" · PRU "}
+                  {asset.avgCostEur !== null
+                    ? formatCurrency(asset.avgCostEur, "EUR")
+                    : formatCurrency(asset.avgCost, asset.quoteCurrency)}
+                  {asset.avgCostUsd !== null
+                    ? ` / ${formatCurrency(asset.avgCostUsd, "USD")}`
+                    : ""}
+                </>
+              ) : null}
             </p>
-          ) : null}
+          </div>
+
+          {/* Wrapper that splits price + value side-by-side on mobile
+              (justify-between), and dissolves into two separate flex
+              children on sm+ via sm:contents. */}
+          <div className="flex items-start justify-between gap-3 sm:contents">
+            {/* Live unit price */}
+            <div className="text-left sm:text-right">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:hidden">
+                Cours
+              </p>
+              <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
+                {asset.currentPriceEur !== null
+                  ? formatCurrency(asset.currentPriceEur, "EUR")
+                  : "—"}
+              </p>
+              {asset.currentPriceUsd !== null ? (
+                <p className="text-xs tabular-nums text-zinc-400">
+                  {formatCurrency(asset.currentPriceUsd, "USD")}
+                </p>
+              ) : null}
+              {asset.dailyChangePct !== null ? (
+                <div className="mt-0.5">
+                  <DailyChange pct={asset.dailyChangePct} />
+                </div>
+              ) : null}
+            </div>
+
+            {/* Position value + gain */}
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:hidden">
+                Position
+              </p>
+              <p className="font-semibold text-black tabular-nums dark:text-zinc-50">
+                {formatCurrency(asset.currentValue, referenceCurrency)}
+              </p>
+              <GainBadge
+                gain={asset.gain}
+                gainPct={asset.gainPct}
+                currency={referenceCurrency}
+                size="sm"
+              />
+              {asset.hasSales ? (
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  Réalisé :{" "}
+                  {formatSignedCurrency(asset.realizedGain, referenceCurrency)}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <span
