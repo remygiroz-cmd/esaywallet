@@ -2,8 +2,13 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { loadPortfolio } from "@/lib/portfolio-server";
 import { getProfileIncome } from "@/lib/income";
+import { getProfileDividends } from "@/lib/dividends";
 import { getProfileRealizedGainEntries } from "@/lib/realized-gains";
-import { taxRateForWalletAt, PEA_MATURITY_YEARS } from "@/lib/constants";
+import {
+  taxRateForWalletAt,
+  taxRateForWalletType,
+  PEA_MATURITY_YEARS,
+} from "@/lib/constants";
 import { buildFxRateMap, convertCurrency } from "@/lib/currency";
 
 const YEAR_MS = 365.25 * 24 * 3600 * 1000;
@@ -65,9 +70,28 @@ export type FiscalWithdrawal = {
   note: string | null;
 };
 
+// A dividend received — tracked purely for tax reporting. The gross
+// amount and any tax already withheld at source are converted to EUR.
+// Like income, dividends inside a PEA are exempt while in the plan.
+export type FiscalDividend = {
+  id: string;
+  receivedAt: string;
+  source: string;
+  assetName: string | null;
+  assetSymbol: string | null;
+  walletId: string | null;
+  walletName: string | null;
+  walletType: string | null;
+  taxRate: number; // ratio
+  gross: number; // EUR
+  withheldTax: number; // EUR
+  taxable: boolean;
+};
+
 export type FiscalData = {
   sales: FiscalSale[];
   income: FiscalIncome[];
+  dividends: FiscalDividend[];
   withdrawals: FiscalWithdrawal[];
   adjustments: { year: number; carryForwardLoss: number }[];
 };
@@ -76,6 +100,7 @@ export async function loadFiscalData(profileId: string): Promise<FiscalData> {
   const [
     portfolio,
     income,
+    dividends,
     realizedEntries,
     walletRows,
     peaWithdrawals,
@@ -84,12 +109,14 @@ export async function loadFiscalData(profileId: string): Promise<FiscalData> {
   ] = await Promise.all([
       loadPortfolio(profileId),
       getProfileIncome(profileId),
+      getProfileDividends(profileId),
       getProfileRealizedGainEntries(profileId),
       prisma.wallet.findMany({
         where: { profileId },
         select: {
           id: true,
           type: true,
+          name: true,
           taxRate: true,
           openedAt: true,
           currency: true,
@@ -122,6 +149,7 @@ export async function loadFiscalData(profileId: string): Promise<FiscalData> {
       wallet.id,
       {
         type: wallet.type,
+        name: wallet.name,
         taxRate: wallet.taxRate,
         openedAt: wallet.openedAt?.toISOString() ?? null,
         currency: wallet.currency,
@@ -232,6 +260,36 @@ export async function loadFiscalData(profileId: string): Promise<FiscalData> {
   });
   incomeRows.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
 
+  // Dividends are purely informational for cash/portfolio purposes but
+  // feed directly into the tax base. The rate falls back to a manual
+  // override, then to the linked wallet's rate (with PEA 5-year rule),
+  // then to the CTO/PFU default.
+  const dividendRows: FiscalDividend[] = dividends.map((entry) => {
+    const meta = entry.walletId ? walletMeta.get(entry.walletId) : undefined;
+    const walletType = meta?.type ?? null;
+    const fallbackRate =
+      entry.taxRate ??
+      (meta
+        ? rateAt(meta, entry.receivedAt.toISOString())
+        : taxRateForWalletType("CTO"));
+    return {
+      id: entry.id,
+      receivedAt: entry.receivedAt.toISOString(),
+      source: entry.source,
+      assetName: entry.asset?.name ?? null,
+      assetSymbol: entry.asset?.symbol ?? null,
+      walletId: entry.walletId ?? null,
+      walletName: meta?.name ?? entry.wallet?.name ?? null,
+      walletType,
+      taxRate: fallbackRate,
+      gross: toEur(entry.grossAmount.toNumber(), entry.currency),
+      withheldTax: toEur(entry.withheldTax.toNumber(), entry.currency),
+      // PEA dividends are exempt while in the plan, matching Income.
+      taxable: walletType !== "PEA",
+    };
+  });
+  dividendRows.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
+
   const withdrawals: FiscalWithdrawal[] = peaWithdrawals.map((movement) => {
     const openedAt = movement.wallet.openedAt;
     const occurredAt = movement.occurredAt;
@@ -254,6 +312,7 @@ export async function loadFiscalData(profileId: string): Promise<FiscalData> {
   return {
     sales,
     income: incomeRows,
+    dividends: dividendRows,
     withdrawals,
     adjustments: adjustments.map((adjustment) => ({
       year: adjustment.year,

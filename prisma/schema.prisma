@@ -52,6 +52,7 @@ model Profile {
   priceAlerts         PriceAlert[]
   realizedGainEntries RealizedGainEntry[]
   documents           Document[]
+  dividends           Dividend[]
 
   @@index([userId])
 }
@@ -107,6 +108,7 @@ model Wallet {
 
   transactions       Transaction[]
   income             Income[]
+  dividends          Dividend[]
   cashMovements      CashMovement[]
   snapshots          PortfolioSnapshot[]
   realizedGainEntries RealizedGainEntry[]
@@ -169,6 +171,7 @@ model Asset {
 
   transactions Transaction[]
   income       Income[]
+  dividends    Dividend[]
   priceAlerts  PriceAlert[]
   price        PriceCache?
 
@@ -212,6 +215,38 @@ model Income {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  @@index([walletId])
+  @@index([assetId])
+}
+
+// A dividend received — tracked purely for tax reporting. Unlike Income,
+// a Dividend has no impact on the wallet's cash balance or on the
+// portfolio's invested capital: it's an informational entry to record
+// what was distributed so it can be declared at the next tax return.
+// The wallet and asset links are optional so a user can enter a bulk
+// figure straight from a tax statement without having to model every
+// payer as an Asset.
+model Dividend {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  walletId    String?
+  wallet      Wallet?  @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  assetId     String?
+  asset       Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  source      String // free-form payer name (e.g. "Apple Inc.", "Boursorama IFU")
+  receivedAt  DateTime
+  grossAmount Decimal // dividend gross, in `currency`
+  withheldTax Decimal  @default(0) // tax already withheld at source, in `currency`
+  currency    String   @default("EUR")
+  // Optional tax-rate override (ratio, e.g. 0.30). Falls back to the
+  // linked wallet's rate, or 30 % (PFU) when no wallet is set.
+  taxRate     Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([profileId])
   @@index([walletId])
   @@index([assetId])
 }

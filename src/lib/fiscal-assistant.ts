@@ -73,6 +73,7 @@ type AppContext = {
   }[];
   appComputedSales: unknown;
   appComputedIncome: unknown;
+  appComputedDividends: unknown;
   appComputedWithdrawals: unknown;
   carryForwardLosses: unknown;
 };
@@ -108,6 +109,9 @@ async function gatherAppContext(
     })),
     appComputedSales: fiscalData.sales.filter((s) => inYear(s.executedAt)),
     appComputedIncome: fiscalData.income.filter((i) => inYear(i.receivedAt)),
+    appComputedDividends: fiscalData.dividends.filter((d) =>
+      inYear(d.receivedAt),
+    ),
     appComputedWithdrawals: fiscalData.withdrawals.filter((w) =>
       inYear(w.occurredAt),
     ),

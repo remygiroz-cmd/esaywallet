@@ -19,15 +19,17 @@ export default async function FiscalitePage() {
 
       {data.sales.length === 0 &&
       data.income.length === 0 &&
+      data.dividends.length === 0 &&
       data.withdrawals.length === 0 ? (
         <div className="rounded-xl border border-dashed border-black/[.15] bg-white p-8 text-center text-sm text-zinc-500 dark:border-white/[.15] dark:bg-zinc-950 dark:text-zinc-400">
-          Aucune vente ni revenu enregistré. Les ventes et revenus que vous
-          saisirez apparaîtront ici, regroupés par année.
+          Aucune vente ni revenu enregistré. Les ventes, dividendes et revenus
+          que vous saisirez apparaîtront ici, regroupés par année.
         </div>
       ) : (
         <FiscaliteView
           sales={data.sales}
           income={data.income}
+          dividends={data.dividends}
           withdrawals={data.withdrawals}
           adjustments={data.adjustments}
         />
