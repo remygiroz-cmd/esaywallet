@@ -8,6 +8,7 @@ import {
 import type {
   FiscalSale,
   FiscalIncome,
+  FiscalDividend,
   FiscalWithdrawal,
 } from "@/lib/fiscalite";
 import { INCOME_KIND_LABELS, type IncomeKind } from "@/lib/constants";
@@ -24,6 +25,7 @@ import { GainBadge } from "./gain-badge";
 type Props = {
   sales: FiscalSale[];
   income: FiscalIncome[];
+  dividends: FiscalDividend[];
   withdrawals: FiscalWithdrawal[];
   adjustments: { year: number; carryForwardLoss: number }[];
 };
@@ -37,6 +39,7 @@ function csvField(value: string | number): string {
 export function FiscaliteView({
   sales,
   income,
+  dividends,
   withdrawals,
   adjustments,
 }: Props) {
@@ -48,10 +51,13 @@ export function FiscaliteView({
           ...income.map((entry) =>
             new Date(entry.receivedAt).getFullYear(),
           ),
+          ...dividends.map((entry) =>
+            new Date(entry.receivedAt).getFullYear(),
+          ),
           ...withdrawals.map((w) => new Date(w.occurredAt).getFullYear()),
         ]),
       ].sort((a, b) => b - a),
-    [sales, income, withdrawals],
+    [sales, income, dividends, withdrawals],
   );
 
   const currentYear = new Date().getFullYear();
@@ -93,6 +99,20 @@ export function FiscaliteView({
     });
   }, [income, mode, year, from, to]);
 
+  const filteredDividends = useMemo(() => {
+    if (mode === "year") {
+      return dividends.filter(
+        (entry) => new Date(entry.receivedAt).getFullYear() === year,
+      );
+    }
+    const fromTime = from ? new Date(from).getTime() : -Infinity;
+    const toTime = to ? new Date(`${to}T23:59:59`).getTime() : Infinity;
+    return dividends.filter((entry) => {
+      const time = new Date(entry.receivedAt).getTime();
+      return time >= fromTime && time <= toTime;
+    });
+  }, [dividends, mode, year, from, to]);
+
   const filteredWithdrawals = useMemo(() => {
     if (mode === "year") {
       return withdrawals.filter(
@@ -133,6 +153,8 @@ export function FiscaliteView({
     let taxableRealized = 0;
     let nonTaxableCount = 0;
     let totalIncome = 0;
+    let totalDividends = 0;
+    let totalWithheld = 0;
 
     const getWallet = (id: string, name: string) => {
       const existing = perWallet.get(id);
@@ -186,6 +208,29 @@ export function FiscaliteView({
       }
     }
 
+    for (const entry of filteredDividends) {
+      totalDividends += entry.gross;
+      totalWithheld += entry.withheldTax;
+      // Group dividends under their wallet when set; otherwise under a
+      // generic "Hors wallet" bucket so they still appear in the per-wallet
+      // breakdown.
+      const wallet = getWallet(
+        entry.walletId ?? "__no-wallet__",
+        entry.walletName ?? "Hors wallet",
+      );
+      wallet.income += entry.gross;
+      wallet.incomeCount += 1;
+      if (entry.taxable) {
+        // Tax credit for tax already withheld at source.
+        const additional = Math.max(
+          0,
+          Math.max(0, entry.gross) * entry.taxRate - entry.withheldTax,
+        );
+        wallet.estimatedTax += additional;
+        wallet.rates.add(entry.taxRate);
+      }
+    }
+
     const wallets = [...perWallet.values()].sort(
       (a, b) =>
         b.realizedGain + b.income - (a.realizedGain + a.income),
@@ -216,6 +261,15 @@ export function FiscaliteView({
         estimatedTax += Math.max(0, entry.net) * entry.taxRate;
       }
     }
+    for (const entry of filteredDividends) {
+      if (entry.taxable) {
+        // Same credit for tax withheld at source as in the per-wallet loop.
+        estimatedTax += Math.max(
+          0,
+          Math.max(0, entry.gross) * entry.taxRate - entry.withheldTax,
+        );
+      }
+    }
 
     return {
       wallets,
@@ -224,10 +278,12 @@ export function FiscaliteView({
       taxableRealized,
       nonTaxableCount,
       totalIncome,
+      totalDividends,
+      totalWithheld,
       netTaxable: Math.max(0, taxableRealized - carryForward),
       estimatedTax,
     };
-  }, [filtered, filteredIncome, carryForward]);
+  }, [filtered, filteredIncome, filteredDividends, carryForward]);
 
   function exportCsv() {
     const header = [
@@ -375,11 +431,24 @@ export function FiscaliteView({
             </p>
           </div>
           <div>
+            <p className="text-base font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
+              {formatCurrency(summary.totalDividends, "EUR")}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Dividendes ({filteredDividends.length} versement
+              {filteredDividends.length === 1 ? "" : "s"}
+              {summary.totalWithheld > 0
+                ? `, ${formatCurrency(summary.totalWithheld, "EUR")} prélevé à la source`
+                : ""}
+              )
+            </p>
+          </div>
+          <div>
             <p className="text-base font-medium text-zinc-600 tabular-nums dark:text-zinc-300">
               {formatCurrency(summary.estimatedTax, "EUR")}
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Impôt estimé (ventes + revenus)
+              Impôt estimé (ventes + revenus + dividendes)
             </p>
           </div>
         </div>
@@ -617,6 +686,78 @@ export function FiscaliteView({
           </div>
         )}
       </section>
+
+      {/* Dividend detail */}
+      {dividends.length > 0 ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Détail des dividendes
+          </h2>
+          {filteredDividends.length === 0 ? (
+            <p className={ui.subtle}>Aucun dividende sur cette période.</p>
+          ) : (
+            <div className={`${ui.card} overflow-x-auto p-0`}>
+              <table className="w-full min-w-[44rem] text-sm">
+                <thead>
+                  <tr className="border-b border-black/[.08] text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-white/[.1] dark:text-zinc-400">
+                    <th className="px-4 py-3 font-medium">Date</th>
+                    <th className="px-4 py-3 font-medium">Source</th>
+                    <th className="px-4 py-3 font-medium">Wallet</th>
+                    <th className="px-4 py-3 text-right font-medium">Brut</th>
+                    <th className="px-4 py-3 text-right font-medium">
+                      Prélevé source
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium">Taux</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDividends.map((entry) => (
+                    <tr
+                      key={entry.id}
+                      className="border-b border-black/[.05] last:border-0 dark:border-white/[.06]"
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                        {formatDate(entry.receivedAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-black dark:text-zinc-50">
+                          {entry.source}
+                        </span>
+                        {entry.assetSymbol ? (
+                          <span className="ml-2 font-mono text-xs text-zinc-400">
+                            {entry.assetSymbol}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
+                        {entry.walletName ?? (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                        {!entry.taxable ? (
+                          <span className="mt-0.5 block text-xs text-amber-600 dark:text-amber-400">
+                            PEA · imposé au retrait
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(entry.gross, "EUR")}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
+                        {entry.withheldTax > 0
+                          ? formatCurrency(entry.withheldTax, "EUR")
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
+                        {formatPercent(entry.taxRate)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {/* PEA withdrawals — the taxable event for a PEA */}
       {withdrawals.length > 0 ? (
