@@ -60,6 +60,10 @@ export type PortfolioInput = {
   fxRates: { quote: string; rate: number }[];
   // Uninvested cash balance per wallet, in the wallet's own currency.
   cashByWallet?: Record<string, number>;
+  // Net contributions per wallet (deposits − withdrawals + manual liquidity),
+  // in the wallet's own currency. Used as the cost basis for the wallet
+  // "versements" view of gains/losses.
+  depositsByWallet?: Record<string, number>;
 };
 
 // One BUY transaction, valued at the current price as if still fully held.
@@ -148,13 +152,17 @@ export type WalletComputation = {
   name: string;
   type: string;
   currency: string;
-  totalCost: number; // wallet currency, open position
+  totalCost: number; // wallet currency, open position (PMP cost basis)
   currentValue: number; // wallet currency, holdings only
   currentValueReference: number; // reference currency, holdings only
   cashBalance: number; // wallet currency, uninvested cash
   totalValue: number; // wallet currency, holdings + cash
-  gain: number; // wallet currency, unrealised
+  totalDeposits: number; // wallet currency, net contributions (versements)
+  gain: number; // wallet currency, unrealised against PMP cost basis
   gainPct: number;
+  // Plus/moins-value globale: totalValue compared to net contributions.
+  globalGain: number; // wallet currency
+  globalGainPct: number;
   realizedGain: number; // wallet currency
   taxRate: number; // ratio applied to realised gains
   estimatedTax: number; // wallet currency, indicative
@@ -277,6 +285,7 @@ export function computePortfolio(
     positions,
     toReference,
     input.cashByWallet ?? {},
+    input.depositsByWallet ?? {},
   );
   const assets = aggregateAssets(
     input.assets,
@@ -479,6 +488,7 @@ function aggregateWallets(
   positions: PositionComputation[],
   toReference: (amount: number, from: string) => number,
   cashByWallet: Record<string, number>,
+  depositsByWallet: Record<string, number>,
 ): WalletComputation[] {
   return wallets.map((wallet) => {
     const walletPositions = positions.filter(
@@ -526,6 +536,10 @@ function aggregateWallets(
 
     const gain = currentValue - totalCost;
     const cashBalance = cashByWallet[wallet.id] ?? 0;
+    const totalDeposits = depositsByWallet[wallet.id] ?? 0;
+    const totalValue = currentValue + cashBalance;
+    const globalGain = totalValue - totalDeposits;
+    const globalGainPct = ratio(globalGain, totalDeposits);
 
     // Each sale is taxed at the rate applying on its own date — this matters
     // for a PEA, which becomes income-tax exempt after 5 years.
@@ -554,9 +568,12 @@ function aggregateWallets(
       currentValue,
       currentValueReference: toReference(currentValue, wallet.currency),
       cashBalance,
-      totalValue: currentValue + cashBalance,
+      totalValue,
+      totalDeposits,
       gain,
       gainPct: ratio(gain, totalCost),
+      globalGain,
+      globalGainPct,
       realizedGain,
       taxRate,
       estimatedTax,

@@ -12,15 +12,26 @@ import {
 export async function loadPortfolioInput(
   profileId: string,
 ): Promise<PortfolioInput> {
-  const [wallets, assets, transactions, prices, fxRates, cashByWallet] =
-    await Promise.all([
-      prisma.wallet.findMany({ where: { profileId } }),
-      prisma.asset.findMany({ where: { profileId } }),
-      prisma.transaction.findMany({ where: { wallet: { profileId } } }),
-      prisma.priceCache.findMany({ where: { asset: { profileId } } }),
-      prisma.fxRate.findMany({ where: { base: "EUR" } }),
-      getCashByWallet(profileId),
-    ]);
+  const [
+    wallets,
+    assets,
+    transactions,
+    prices,
+    fxRates,
+    cashByWallet,
+    cashMovements,
+  ] = await Promise.all([
+    prisma.wallet.findMany({ where: { profileId } }),
+    prisma.asset.findMany({ where: { profileId } }),
+    prisma.transaction.findMany({ where: { wallet: { profileId } } }),
+    prisma.priceCache.findMany({ where: { asset: { profileId } } }),
+    prisma.fxRate.findMany({ where: { base: "EUR" } }),
+    getCashByWallet(profileId),
+    prisma.cashMovement.findMany({
+      where: { wallet: { profileId } },
+      select: { walletId: true, kind: true, amount: true },
+    }),
+  ]);
 
   // Fold the user-entered manual liquidity into the per-wallet cash so the
   // wallet total picks it up alongside the movements-derived cash.
@@ -31,6 +42,28 @@ export async function loadPortfolioInput(
       cashByWalletWithManual.set(
         wallet.id,
         (cashByWalletWithManual.get(wallet.id) ?? 0) + manual,
+      );
+    }
+  }
+
+  // Net contributions per wallet: deposits − withdrawals, plus the manual
+  // liquidity (treated as recorded versement so the global gain compares
+  // current value against everything the user has put in).
+  const depositsByWallet = new Map<string, number>();
+  for (const movement of cashMovements) {
+    const amount = movement.amount.toNumber();
+    const signed = movement.kind === "DEPOSIT" ? amount : -amount;
+    depositsByWallet.set(
+      movement.walletId,
+      (depositsByWallet.get(movement.walletId) ?? 0) + signed,
+    );
+  }
+  for (const wallet of wallets) {
+    const manual = wallet.manualLiquidity.toNumber();
+    if (manual !== 0) {
+      depositsByWallet.set(
+        wallet.id,
+        (depositsByWallet.get(wallet.id) ?? 0) + manual,
       );
     }
   }
@@ -75,6 +108,7 @@ export async function loadPortfolioInput(
       rate: rate.rate.toNumber(),
     })),
     cashByWallet: Object.fromEntries(cashByWalletWithManual),
+    depositsByWallet: Object.fromEntries(depositsByWallet),
   };
 }
 

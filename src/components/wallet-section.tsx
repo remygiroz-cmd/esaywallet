@@ -182,25 +182,29 @@ function WalletCard({
 
       <div>
         <p className="text-xl font-semibold text-black tabular-nums dark:text-zinc-50">
-          {formatCurrency(wallet.currentValue, wallet.currency)}
+          {formatCurrency(wallet.totalValue, wallet.currency)}
         </p>
         <div className="mt-1">
           <GainBadge
-            gain={wallet.gain}
-            gainPct={wallet.gainPct}
+            gain={wallet.globalGain}
+            gainPct={wallet.globalGainPct}
             currency={wallet.currency}
             size="sm"
           />
         </div>
       </div>
 
+      {wallet.totalDeposits !== 0 ? (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Versements : {formatCurrency(wallet.totalDeposits, wallet.currency)}
+        </p>
+      ) : null}
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Investi : {formatCurrency(wallet.totalCost, wallet.currency)}
+        Actions : {formatCurrency(wallet.currentValue, wallet.currency)}
       </p>
       {wallet.cashBalance !== 0 ? (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Espèces : {formatCurrency(wallet.cashBalance, wallet.currency)} ·
-          total {formatCurrency(wallet.totalValue, wallet.currency)}
+          Espèces : {formatCurrency(wallet.cashBalance, wallet.currency)}
         </p>
       ) : null}
       {wallet.realizedGain !== 0 ? (
