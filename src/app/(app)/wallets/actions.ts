@@ -27,6 +27,8 @@ const walletSchema = z.object({
   taxRate: z.string().trim().max(10).optional(),
   // Account opening date (YYYY-MM-DD); "" = unknown.
   openedAt: z.string().trim().max(10).optional(),
+  // Manually entered uninvested cash, in the wallet currency; "" = 0.
+  manualLiquidity: z.string().trim().max(20).optional(),
 });
 
 function parseWallet(formData: FormData) {
@@ -36,6 +38,7 @@ function parseWallet(formData: FormData) {
     currency: formData.get("currency"),
     taxRate: formData.get("taxRate") ?? "",
     openedAt: formData.get("openedAt") ?? "",
+    manualLiquidity: formData.get("manualLiquidity") ?? "",
   });
 }
 
@@ -54,6 +57,14 @@ function toOpenedAt(raw: string | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// Number string -> non-negative number, or 0 when blank / invalid.
+function toManualLiquidity(raw: string | undefined): number {
+  if (!raw) return 0;
+  const value = Number(raw.replace(",", "."));
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return value;
+}
+
 export async function createWalletAction(
   _prev: WalletFormState,
   formData: FormData,
@@ -69,6 +80,7 @@ export async function createWalletAction(
     currency: parsed.data.currency,
     taxRate: toTaxRate(parsed.data.taxRate),
     openedAt: toOpenedAt(parsed.data.openedAt),
+    manualLiquidity: toManualLiquidity(parsed.data.manualLiquidity),
   });
   revalidatePath("/wallets");
   return { ok: true, submittedAt: Date.now() };
@@ -91,6 +103,7 @@ export async function updateWalletAction(
     currency: parsed.data.currency,
     taxRate: toTaxRate(parsed.data.taxRate),
     openedAt: toOpenedAt(parsed.data.openedAt),
+    manualLiquidity: toManualLiquidity(parsed.data.manualLiquidity),
   });
   revalidatePath("/wallets");
   revalidatePath(`/wallets/${id}`);

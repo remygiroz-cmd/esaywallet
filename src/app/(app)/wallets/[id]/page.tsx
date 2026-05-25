@@ -37,7 +37,18 @@ export default async function WalletDetailPage({
     getWalletCashMovements(wallet.id, profile.id),
     getCashByWallet(profile.id),
   ]);
-  const cashBalance = cashByWallet.get(wallet.id) ?? 0;
+  const movementsCash = cashByWallet.get(wallet.id) ?? 0;
+  const manualLiquidity = wallet.manualLiquidity.toNumber();
+  const cashBalance = movementsCash + manualLiquidity;
+  const walletForForm = {
+    id: wallet.id,
+    name: wallet.name,
+    type: wallet.type,
+    currency: wallet.currency,
+    taxRate: wallet.taxRate,
+    openedAt: wallet.openedAt,
+    manualLiquidity,
+  };
 
   const rows: TransactionRow[] = transactions.map((tx) => ({
     id: tx.id,
@@ -83,7 +94,7 @@ export default async function WalletDetailPage({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
           Paramètres
         </h2>
-        <WalletEditForm wallet={wallet} />
+        <WalletEditForm wallet={walletForForm} />
       </section>
 
       <section className="flex flex-col gap-3">
@@ -105,9 +116,26 @@ export default async function WalletDetailPage({
               Solde de liquidités
             </p>
           </div>
+          {manualLiquidity !== 0 ? (
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+              <p>
+                Mouvements :{" "}
+                <span className="tabular-nums">
+                  {formatCurrency(movementsCash, wallet.currency)}
+                </span>
+              </p>
+              <p>
+                Solde manuel :{" "}
+                <span className="tabular-nums">
+                  {formatCurrency(manualLiquidity, wallet.currency)}
+                </span>
+              </p>
+            </div>
+          ) : null}
           <p className="text-xs text-zinc-400">
-            Dépôts − retraits − achats + ventes + revenus. Un solde négatif
-            signifie qu&apos;il manque des dépôts à enregistrer.
+            Dépôts − retraits − achats + ventes + revenus, plus le solde
+            manuel saisi dans les paramètres du wallet. Inclus dans le total
+            du wallet.
           </p>
         </div>
 

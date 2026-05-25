@@ -8,6 +8,7 @@ export type WalletInput = {
   currency: string;
   taxRate: number | null;
   openedAt: Date | null;
+  manualLiquidity: number;
 };
 
 export function getProfileWallets(profileId: string) {

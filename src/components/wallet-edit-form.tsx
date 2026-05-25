@@ -24,6 +24,7 @@ type WalletEditFormProps = {
     currency: string;
     taxRate: number | null;
     openedAt: Date | null;
+    manualLiquidity: number;
   };
 };
 
@@ -98,6 +99,24 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
         <span className="text-xs font-normal text-zinc-400">
           Pour un PEA, sert à appliquer automatiquement la règle des 5 ans
           (30 % avant 5 ans, 17,2 % ensuite).
+        </span>
+      </label>
+
+      <label className={ui.label}>
+        Solde de liquidités manuel ({wallet.currency})
+        <input
+          name="manualLiquidity"
+          type="number"
+          step="any"
+          min="0"
+          defaultValue={wallet.manualLiquidity || ""}
+          placeholder="0.00"
+          className={ui.input}
+        />
+        <span className="text-xs font-normal text-zinc-400">
+          Liquidités disponibles sur ce compte en attente d&apos;investissement.
+          S&apos;ajoute au solde calculé depuis les dépôts/retraits et est inclus
+          dans le total du wallet.
         </span>
       </label>
 

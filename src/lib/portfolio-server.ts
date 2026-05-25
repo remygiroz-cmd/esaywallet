@@ -22,6 +22,19 @@ export async function loadPortfolioInput(
       getCashByWallet(profileId),
     ]);
 
+  // Fold the user-entered manual liquidity into the per-wallet cash so the
+  // wallet total picks it up alongside the movements-derived cash.
+  const cashByWalletWithManual = new Map(cashByWallet);
+  for (const wallet of wallets) {
+    const manual = wallet.manualLiquidity.toNumber();
+    if (manual !== 0) {
+      cashByWalletWithManual.set(
+        wallet.id,
+        (cashByWalletWithManual.get(wallet.id) ?? 0) + manual,
+      );
+    }
+  }
+
   return {
     wallets: wallets.map((wallet) => ({
       id: wallet.id,
@@ -61,7 +74,7 @@ export async function loadPortfolioInput(
       quote: rate.quote,
       rate: rate.rate.toNumber(),
     })),
-    cashByWallet: Object.fromEntries(cashByWallet),
+    cashByWallet: Object.fromEntries(cashByWalletWithManual),
   };
 }
 
