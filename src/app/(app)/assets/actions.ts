@@ -10,8 +10,10 @@ import {
   upsertAsset,
   updateAsset,
   deleteAsset,
+  mergeAssets,
   type AssetInput,
 } from "@/lib/assets";
+import { prisma } from "@/lib/prisma";
 
 export type AssetFormState = {
   error?: string;
@@ -97,4 +99,48 @@ export async function deleteAssetAction(formData: FormData): Promise<void> {
   }
   revalidatePath("/assets");
   redirect("/assets");
+}
+
+export type MergeAssetsState = {
+  error?: string;
+  ok?: boolean;
+  // Bumped on every successful merge — drives the client to clear its
+  // selection.
+  mergedAt?: number;
+};
+
+export async function mergeAssetsAction(
+  _prev: MergeAssetsState,
+  formData: FormData,
+): Promise<MergeAssetsState> {
+  const { profile } = await requireProfile();
+  const targetId = String(formData.get("targetId") ?? "");
+  const sourceIds = formData
+    .getAll("sourceIds")
+    .map((value) => String(value))
+    .filter((value) => value.length > 0 && value !== targetId);
+
+  if (!targetId) return { error: "Choisis l'asset à conserver." };
+  if (sourceIds.length === 0)
+    return { error: "Sélectionne au moins un autre asset à fusionner." };
+
+  // Make sure every id actually belongs to the current profile — never
+  // trust the form payload.
+  const owned = await prisma.asset.findMany({
+    where: { id: { in: [targetId, ...sourceIds] }, profileId: profile.id },
+    select: { id: true },
+  });
+  const ownedIds = new Set(owned.map((asset) => asset.id));
+  if (!ownedIds.has(targetId))
+    return { error: "Asset cible introuvable." };
+  const validSourceIds = sourceIds.filter((id) => ownedIds.has(id));
+  if (validSourceIds.length === 0)
+    return { error: "Aucun asset valide à fusionner." };
+
+  await mergeAssets(profile.id, targetId, validSourceIds);
+
+  revalidatePath("/assets");
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  return { ok: true, mergedAt: Date.now() };
 }
