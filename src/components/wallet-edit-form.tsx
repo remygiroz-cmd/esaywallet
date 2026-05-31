@@ -10,6 +10,7 @@ import {
   WALLET_TYPE_LABELS,
   SUPPORTED_CURRENCIES,
   taxRateForWalletType,
+  walletTracksCash,
 } from "@/lib/constants";
 import { toDateInputValue } from "@/lib/format";
 import { ui } from "@/lib/ui";
@@ -24,7 +25,8 @@ type WalletEditFormProps = {
     currency: string;
     taxRate: number | null;
     openedAt: Date | null;
-    manualLiquidity: number;
+    manualDeposits: number | null;
+    manualCash: number | null;
   };
 };
 
@@ -37,6 +39,9 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
   const defaultRatePercent = (
     taxRateForWalletType(wallet.type) * 100
   ).toLocaleString("fr-FR");
+  // A CTO carries no cash and no versements — it's tracked by its holdings,
+  // realised gains and estimated tax — so we hide the override fields for it.
+  const tracksCash = walletTracksCash(wallet.type);
 
   return (
     <form action={formAction} className={`${ui.card} flex flex-col gap-4`}>
@@ -102,23 +107,42 @@ export function WalletEditForm({ wallet }: WalletEditFormProps) {
         </span>
       </label>
 
-      <label className={ui.label}>
-        Solde de liquidités manuel ({wallet.currency})
-        <input
-          name="manualLiquidity"
-          type="number"
-          step="any"
-          min="0"
-          defaultValue={wallet.manualLiquidity || ""}
-          placeholder="0.00"
-          className={ui.input}
-        />
-        <span className="text-xs font-normal text-zinc-400">
-          Liquidités disponibles sur ce compte en attente d&apos;investissement.
-          S&apos;ajoute au solde calculé depuis les dépôts/retraits et est inclus
-          dans le total du wallet.
-        </span>
-      </label>
+      {tracksCash ? (
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <label className={`${ui.label} flex-1`}>
+            Versements ({wallet.currency})
+            <input
+              name="manualDeposits"
+              type="number"
+              step="any"
+              defaultValue={wallet.manualDeposits ?? ""}
+              placeholder="Calculé depuis les dépôts/retraits"
+              className={ui.input}
+            />
+            <span className="text-xs font-normal text-zinc-400">
+              Total des sommes versées sur ce compte. Laissez vide pour le
+              calculer à partir des dépôts/retraits enregistrés.
+            </span>
+          </label>
+
+          <label className={`${ui.label} flex-1`}>
+            Espèces ({wallet.currency})
+            <input
+              name="manualCash"
+              type="number"
+              step="any"
+              defaultValue={wallet.manualCash ?? ""}
+              placeholder="Calculé depuis les mouvements"
+              className={ui.input}
+            />
+            <span className="text-xs font-normal text-zinc-400">
+              Solde de liquidités en attente d&apos;investissement. Laissez
+              vide pour le calculer (dépôts − retraits − achats + ventes +
+              revenus). Inclus dans le total du wallet.
+            </span>
+          </label>
+        </div>
+      ) : null}
 
       <label className={ui.label}>
         Taux d&apos;imposition des plus-values (%)

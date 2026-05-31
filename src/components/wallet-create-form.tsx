@@ -71,18 +71,6 @@ export function WalletCreateForm() {
         <input name="openedAt" type="date" className={ui.input} />
       </label>
 
-      <label className={`${ui.label} sm:w-40`}>
-        Solde manuel
-        <input
-          name="manualLiquidity"
-          type="number"
-          step="any"
-          min="0"
-          placeholder="0.00"
-          className={ui.input}
-        />
-      </label>
-
       <button type="submit" disabled={pending} className={ui.primaryButton}>
         {pending ? "Création…" : "Ajouter"}
       </button>

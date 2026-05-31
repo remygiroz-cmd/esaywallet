@@ -103,11 +103,14 @@ model Wallet {
   taxRate   Float?
   // Account opening date — used for the PEA 5-year rule when estimating tax.
   openedAt  DateTime?
-  // User-entered cash balance held in the account but not yet invested.
-  // Added on top of the cash derived from movements/transactions and rolled
-  // into the wallet total. Lets a user record liquidity without having to
-  // capture every deposit individually.
-  manualLiquidity Decimal @default(0)
+  // Manual overrides for the two figures the app would otherwise derive from
+  // recorded movements/transactions. When non-null they *replace* the
+  // computed value on the wallet card — handy for an envelope (e.g. a PEA)
+  // whose full deposit history isn't captured. Left null = compute it.
+  //   manualDeposits → "Versements" (net contributions paid in)
+  //   manualCash     → "Espèces" (uninvested cash balance)
+  manualDeposits Decimal?
+  manualCash     Decimal?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

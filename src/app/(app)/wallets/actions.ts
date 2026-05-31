@@ -27,8 +27,9 @@ const walletSchema = z.object({
   taxRate: z.string().trim().max(10).optional(),
   // Account opening date (YYYY-MM-DD); "" = unknown.
   openedAt: z.string().trim().max(10).optional(),
-  // Manually entered uninvested cash, in the wallet currency; "" = 0.
-  manualLiquidity: z.string().trim().max(20).optional(),
+  // Manual overrides, in the wallet currency; "" = compute the figure.
+  manualDeposits: z.string().trim().max(20).optional(),
+  manualCash: z.string().trim().max(20).optional(),
 });
 
 function parseWallet(formData: FormData) {
@@ -38,7 +39,8 @@ function parseWallet(formData: FormData) {
     currency: formData.get("currency"),
     taxRate: formData.get("taxRate") ?? "",
     openedAt: formData.get("openedAt") ?? "",
-    manualLiquidity: formData.get("manualLiquidity") ?? "",
+    manualDeposits: formData.get("manualDeposits") ?? "",
+    manualCash: formData.get("manualCash") ?? "",
   });
 }
 
@@ -57,12 +59,12 @@ function toOpenedAt(raw: string | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-// Number string -> non-negative number, or 0 when blank / invalid.
-function toManualLiquidity(raw: string | undefined): number {
-  if (!raw) return 0;
+// Number string -> override value, or null when left blank (= compute it).
+// Negative values are allowed: a cash balance can legitimately be negative.
+function toManualOverride(raw: string | undefined): number | null {
+  if (raw === undefined || raw.trim() === "") return null;
   const value = Number(raw.replace(",", "."));
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return value;
+  return Number.isFinite(value) ? value : null;
 }
 
 export async function createWalletAction(
@@ -80,7 +82,8 @@ export async function createWalletAction(
     currency: parsed.data.currency,
     taxRate: toTaxRate(parsed.data.taxRate),
     openedAt: toOpenedAt(parsed.data.openedAt),
-    manualLiquidity: toManualLiquidity(parsed.data.manualLiquidity),
+    manualDeposits: toManualOverride(parsed.data.manualDeposits),
+    manualCash: toManualOverride(parsed.data.manualCash),
   });
   revalidatePath("/wallets");
   return { ok: true, submittedAt: Date.now() };
@@ -103,7 +106,8 @@ export async function updateWalletAction(
     currency: parsed.data.currency,
     taxRate: toTaxRate(parsed.data.taxRate),
     openedAt: toOpenedAt(parsed.data.openedAt),
-    manualLiquidity: toManualLiquidity(parsed.data.manualLiquidity),
+    manualDeposits: toManualOverride(parsed.data.manualDeposits),
+    manualCash: toManualOverride(parsed.data.manualCash),
   });
   revalidatePath("/wallets");
   revalidatePath(`/wallets/${id}`);

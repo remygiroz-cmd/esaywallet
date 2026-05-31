@@ -3,7 +3,11 @@
 import { useState } from "react";
 import type { WalletComputation, WalletAssetLine } from "@/lib/portfolio";
 import { moveAssetWalletAction } from "@/app/(app)/transactions/actions";
-import { WALLET_TYPE_LABELS, type WalletType } from "@/lib/constants";
+import {
+  WALLET_TYPE_LABELS,
+  type WalletType,
+  walletTracksCash,
+} from "@/lib/constants";
 import { formatCurrency, formatQuantity } from "@/lib/format";
 import { ui } from "@/lib/ui";
 import { GainBadge } from "./gain-badge";
@@ -129,6 +133,7 @@ function WalletCard({
   onCardDrop: (payload: DragPayload) => void;
   onMove: (assetId: string, from: string, to: string) => void;
 }) {
+  const tracksCash = walletTracksCash(wallet.type);
   return (
     <div
       onDragOver={(event) => {
@@ -185,9 +190,12 @@ function WalletCard({
           {formatCurrency(wallet.totalValue, wallet.currency)}
         </p>
         <div className="mt-1">
+          {/* Cash-tracking envelopes (PEA, livret…) measure performance
+              against the versements; a CTO has no versements, so it shows the
+              plain unrealised gain on its holdings instead. */}
           <GainBadge
-            gain={wallet.globalGain}
-            gainPct={wallet.globalGainPct}
+            gain={tracksCash ? wallet.globalGain : wallet.gain}
+            gainPct={tracksCash ? wallet.globalGainPct : wallet.gainPct}
             currency={wallet.currency}
             size="sm"
           />
@@ -199,13 +207,17 @@ function WalletCard({
           Versements : {formatCurrency(wallet.totalDeposits, wallet.currency)}
         </p>
       ) : null}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Actions : {formatCurrency(wallet.currentValue, wallet.currency)}
-      </p>
+      {/* The "Actions" breakdown only adds information when there's also a
+          cash balance to split out; otherwise it just repeats the headline. */}
       {wallet.cashBalance !== 0 ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Espèces : {formatCurrency(wallet.cashBalance, wallet.currency)}
-        </p>
+        <>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Actions : {formatCurrency(wallet.currentValue, wallet.currency)}
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Espèces : {formatCurrency(wallet.cashBalance, wallet.currency)}
+          </p>
+        </>
       ) : null}
       {wallet.realizedGain !== 0 ? (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">

@@ -100,6 +100,17 @@ export function taxRateForWalletType(type: string): number {
   return TAX_RATE_BY_WALLET_TYPE[type as WalletType] ?? 0.3;
 }
 
+// Wallet types tracked purely by their securities and realised gains, with
+// no cash (espèces) line. A CTO is funded externally and we don't model its
+// brokerage cash, so its value is just the holdings — and we surface the
+// realised gains and the estimated tax as they accrue. Envelopes such as a
+// PEA or livret do hold a cash balance, so they keep the espèces line.
+export const NON_CASH_WALLET_TYPES: WalletType[] = ["CTO"];
+
+export function walletTracksCash(type: string): boolean {
+  return !NON_CASH_WALLET_TYPES.includes(type as WalletType);
+}
+
 // A PEA becomes income-tax exempt (social contributions only) after 5 years;
 // gains realised before that are taxed at the flat tax rate.
 export const PEA_MATURITY_YEARS = 5;

@@ -8,7 +8,9 @@ export type WalletInput = {
   currency: string;
   taxRate: number | null;
   openedAt: Date | null;
-  manualLiquidity: number;
+  // Manual overrides; null = compute the figure from movements/transactions.
+  manualDeposits: number | null;
+  manualCash: number | null;
 };
 
 export function getProfileWallets(profileId: string) {

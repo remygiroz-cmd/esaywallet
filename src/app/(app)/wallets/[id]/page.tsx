@@ -9,6 +9,7 @@ import {
   type WalletType,
   CASH_MOVEMENT_KIND_LABELS,
   type CashMovementKind,
+  walletTracksCash,
 } from "@/lib/constants";
 import { ui } from "@/lib/ui";
 import { formatCurrency, formatDate, toDateInputValue } from "@/lib/format";
@@ -38,8 +39,13 @@ export default async function WalletDetailPage({
     getCashByWallet(profile.id),
   ]);
   const movementsCash = cashByWallet.get(wallet.id) ?? 0;
-  const manualLiquidity = wallet.manualLiquidity.toNumber();
-  const cashBalance = movementsCash + manualLiquidity;
+  const manualDeposits =
+    wallet.manualDeposits !== null ? wallet.manualDeposits.toNumber() : null;
+  const manualCash =
+    wallet.manualCash !== null ? wallet.manualCash.toNumber() : null;
+  // A manual override replaces the movements-derived cash when set.
+  const cashBalance = manualCash !== null ? manualCash : movementsCash;
+  const tracksCash = walletTracksCash(wallet.type);
   const walletForForm = {
     id: wallet.id,
     name: wallet.name,
@@ -47,7 +53,8 @@ export default async function WalletDetailPage({
     currency: wallet.currency,
     taxRate: wallet.taxRate,
     openedAt: wallet.openedAt,
-    manualLiquidity,
+    manualDeposits,
+    manualCash,
   };
 
   const rows: TransactionRow[] = transactions.map((tx) => ({
@@ -97,6 +104,7 @@ export default async function WalletDetailPage({
         <WalletEditForm wallet={walletForForm} />
       </section>
 
+      {tracksCash ? (
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
           Espèces
@@ -116,26 +124,26 @@ export default async function WalletDetailPage({
               Solde de liquidités
             </p>
           </div>
-          {manualLiquidity !== 0 ? (
+          {manualCash !== null ? (
             <div className="text-xs text-zinc-500 dark:text-zinc-400">
               <p>
-                Mouvements :{" "}
+                Solde saisi manuellement :{" "}
                 <span className="tabular-nums">
-                  {formatCurrency(movementsCash, wallet.currency)}
+                  {formatCurrency(manualCash, wallet.currency)}
                 </span>
               </p>
               <p>
-                Solde manuel :{" "}
+                Calcul des mouvements :{" "}
                 <span className="tabular-nums">
-                  {formatCurrency(manualLiquidity, wallet.currency)}
+                  {formatCurrency(movementsCash, wallet.currency)}
                 </span>
               </p>
             </div>
           ) : null}
           <p className="text-xs text-zinc-400">
-            Dépôts − retraits − achats + ventes + revenus, plus le solde
-            manuel saisi dans les paramètres du wallet. Inclus dans le total
-            du wallet.
+            {manualCash !== null
+              ? "Solde saisi dans les paramètres du wallet, qui remplace le calcul automatique. Inclus dans le total du wallet."
+              : "Dépôts − retraits − achats + ventes + revenus. Renseignez un solde manuel dans les paramètres pour le remplacer. Inclus dans le total du wallet."}
           </p>
         </div>
 
@@ -219,6 +227,7 @@ export default async function WalletDetailPage({
           </div>
         )}
       </section>
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

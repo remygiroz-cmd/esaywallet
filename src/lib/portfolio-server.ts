@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCashByWallet } from "@/lib/cash";
+import { walletTracksCash } from "@/lib/constants";
 import {
   computePortfolio,
   type PortfolioInput,
@@ -33,39 +34,47 @@ export async function loadPortfolioInput(
     }),
   ]);
 
-  // Fold the user-entered manual liquidity into the per-wallet cash so the
-  // wallet total picks it up alongside the movements-derived cash.
-  const cashByWalletWithManual = new Map(cashByWallet);
-  for (const wallet of wallets) {
-    const manual = wallet.manualLiquidity.toNumber();
-    if (manual !== 0) {
-      cashByWalletWithManual.set(
-        wallet.id,
-        (cashByWalletWithManual.get(wallet.id) ?? 0) + manual,
-      );
-    }
-  }
-
-  // Net contributions per wallet: deposits − withdrawals, plus the manual
-  // liquidity (treated as recorded versement so the global gain compares
-  // current value against everything the user has put in).
-  const depositsByWallet = new Map<string, number>();
+  // Net contributions (versements) derived from movements: deposits − withdrawals.
+  const derivedDeposits = new Map<string, number>();
   for (const movement of cashMovements) {
     const amount = movement.amount.toNumber();
     const signed = movement.kind === "DEPOSIT" ? amount : -amount;
-    depositsByWallet.set(
+    derivedDeposits.set(
       movement.walletId,
-      (depositsByWallet.get(movement.walletId) ?? 0) + signed,
+      (derivedDeposits.get(movement.walletId) ?? 0) + signed,
     );
   }
+
+  // Resolve the final cash (espèces) and deposits (versements) per wallet,
+  // applying the per-wallet manual overrides when set:
+  //  - A CTO (and any non-cash wallet type) carries no cash at all — its
+  //    value is just the holdings, with realised gains and tax tracked
+  //    separately. So its cash is forced to 0.
+  //  - Otherwise, a manual override replaces the computed figure; a null
+  //    override falls back to the value derived from movements/transactions.
+  const finalCashByWallet = new Map<string, number>();
+  const depositsByWallet = new Map<string, number>();
   for (const wallet of wallets) {
-    const manual = wallet.manualLiquidity.toNumber();
-    if (manual !== 0) {
-      depositsByWallet.set(
+    const manualCash = wallet.manualCash;
+    const manualDeposits = wallet.manualDeposits;
+
+    if (!walletTracksCash(wallet.type)) {
+      finalCashByWallet.set(wallet.id, 0);
+    } else {
+      finalCashByWallet.set(
         wallet.id,
-        (depositsByWallet.get(wallet.id) ?? 0) + manual,
+        manualCash !== null
+          ? manualCash.toNumber()
+          : (cashByWallet.get(wallet.id) ?? 0),
       );
     }
+
+    depositsByWallet.set(
+      wallet.id,
+      manualDeposits !== null
+        ? manualDeposits.toNumber()
+        : (derivedDeposits.get(wallet.id) ?? 0),
+    );
   }
 
   return {
@@ -107,7 +116,7 @@ export async function loadPortfolioInput(
       quote: rate.quote,
       rate: rate.rate.toNumber(),
     })),
-    cashByWallet: Object.fromEntries(cashByWalletWithManual),
+    cashByWallet: Object.fromEntries(finalCashByWallet),
     depositsByWallet: Object.fromEntries(depositsByWallet),
   };
 }
