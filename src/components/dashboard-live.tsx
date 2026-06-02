@@ -368,12 +368,6 @@ function HeroSummary({
       value: formatCurrency(portfolio.estimatedTax, ccy),
     });
   }
-  if (portfolio.cashBalance !== 0) {
-    tiles.push({
-      label: "Espèces",
-      value: formatCurrency(portfolio.cashBalance, ccy),
-    });
-  }
   const incomeEntries = Object.entries(income);
   if (incomeEntries.length > 0) {
     tiles.push({
