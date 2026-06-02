@@ -129,6 +129,19 @@ function WalletCard({
   onCardDrop: (payload: DragPayload) => void;
   onMove: (assetId: string, from: string, to: string) => void;
 }) {
+  // The card shows the securities value (holdings) only — no cash line, which
+  // was confusing when it went negative (buys without matching deposits). The
+  // gain compares those holdings to the versements when known, otherwise to
+  // their cost basis (the plain unrealised gain).
+  const hasDeposits = wallet.totalDeposits !== 0;
+  const cardGain = hasDeposits
+    ? wallet.currentValue - wallet.totalDeposits
+    : wallet.gain;
+  const cardGainPct = hasDeposits
+    ? wallet.totalDeposits > 0
+      ? cardGain / wallet.totalDeposits
+      : 0
+    : wallet.gainPct;
   return (
     <div
       onDragOver={(event) => {
@@ -182,12 +195,12 @@ function WalletCard({
 
       <div>
         <p className="text-xl font-semibold text-black tabular-nums dark:text-zinc-50">
-          {formatCurrency(wallet.totalValue, wallet.currency)}
+          {formatCurrency(wallet.currentValue, wallet.currency)}
         </p>
         <div className="mt-1">
           <GainBadge
-            gain={wallet.globalGain}
-            gainPct={wallet.globalGainPct}
+            gain={cardGain}
+            gainPct={cardGainPct}
             currency={wallet.currency}
             size="sm"
           />
@@ -197,14 +210,6 @@ function WalletCard({
       {wallet.totalDeposits !== 0 ? (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Versements : {formatCurrency(wallet.totalDeposits, wallet.currency)}
-        </p>
-      ) : null}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Actions : {formatCurrency(wallet.currentValue, wallet.currency)}
-      </p>
-      {wallet.cashBalance !== 0 ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Espèces : {formatCurrency(wallet.cashBalance, wallet.currency)}
         </p>
       ) : null}
       {wallet.realizedGain !== 0 ? (
